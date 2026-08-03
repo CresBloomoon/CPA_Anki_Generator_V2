@@ -12,5 +12,8 @@ dist/
 .env
 !.env.example
 
+# Claude Code (個人のローカル設定)
+.claude/settings.local.json
+
 # OS
 .DS_Store
