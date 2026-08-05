@@ -8,10 +8,8 @@ from app.domain.section import DeckPath, PageRange, Section
 def _make_section(title: str) -> Section:
     return Section(
         title=title,
-        chapter_title="01章 総論",
         page_range=PageRange(start_page=1, end_page=5),
         deck_path=DeckPath.from_string("公認会計士試験::財務会計論"),
-        min_card_count=1,
         source_file="textbook.pdf",
     )
 

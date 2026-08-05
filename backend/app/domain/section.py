@@ -11,9 +11,14 @@ class PageRange:
     def __post_init__(self) -> None:
         if self.start_page < 1:
             raise ValueError(f"start_page must be >= 1, got {self.start_page}")
-        if self.end_page is not None and self.end_page <= self.start_page:
+        # A zero-length range (end_page == start_page) is allowed: a TOC
+        # entry can legitimately share its start page with the very next
+        # entry (e.g. a part heading and its first chapter on the same
+        # page), in which case it has no page range of its own. Only a
+        # genuinely negative-length range is rejected.
+        if self.end_page is not None and self.end_page < self.start_page:
             raise ValueError(
-                f"end_page ({self.end_page}) must be greater than "
+                f"end_page ({self.end_page}) must not be less than "
                 f"start_page ({self.start_page})"
             )
 
@@ -52,20 +57,12 @@ class DeckPath:
 @dataclass(frozen=True)
 class Section:
     title: str
-    chapter_title: str
     page_range: PageRange
     deck_path: DeckPath
-    min_card_count: int
     source_file: str
 
     def __post_init__(self) -> None:
         if not self.title.strip():
             raise ValueError("title must not be empty")
-        if not self.chapter_title.strip():
-            raise ValueError("chapter_title must not be empty")
-        if self.min_card_count < 0:
-            raise ValueError(
-                f"min_card_count must be >= 0, got {self.min_card_count}"
-            )
         if not self.source_file.strip():
             raise ValueError("source_file must not be empty")
