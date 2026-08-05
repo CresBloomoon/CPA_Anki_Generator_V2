@@ -1,0 +1,45 @@
+.card {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    text-align: left;
+    background-color: #f8f9fa;
+}
+
+/* ボックスの通常状態：指を離したときの心地よいバネ感（戻り） */
+[onclick="copyBox(this)"] {
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    will-change: transform;
+}
+
+/* タップした瞬間（アクティブ状態）の沈み込みの速度調整 */
+[onclick="copyBox(this)"]:active,
+.copy-success-active {
+    transform: scale(0.96);
+    transition: transform 0.05s ease-out;
+}
+
+@keyframes success-pop-fade {
+    0% { transform: scale(0.5); opacity: 0; }
+    20% { transform: scale(1.1); opacity: 1; }
+    80% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(1); opacity: 0; }
+}
+
+.copy-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    margin-top: -20px;
+    margin-left: -20px;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.9) url('_success_icon.png') no-repeat center;
+    background-size: 24px 24px;
+    border-radius: 50%;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.copy-success-active .copy-overlay {
+    animation: success-pop-fade 1.0s ease-out forwards;
+}

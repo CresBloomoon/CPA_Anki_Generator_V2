@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="utf-8">
+  <title>CPA Anki Front Card Template</title>
+</head>
+
+<body>
+
+  <div style="
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+">
+
+    <div style="
+    border: 1px solid rgba(0,0,0,0.12);
+    border-left: 6px solid #1e88e5;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin: 10px 0 14px;
+    background: #ffffff;
+    color: #111111;
+    line-height: 1.6;
+  ">
+
+      <div style="font-weight:800; font-size:18px; margin-bottom:6px;">
+        {{TITLE}}
+      </div>
+
+      <div style="
+      font-size: 13px;
+      color: rgba(0,0,0,0.7);
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    ">
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+          <div>
+            【短答：<span style="font-weight:700; color:#e53935;">{{RANK_TANTO}}</span>】
+          </div>
+          <div>
+            【論文：<span style="font-weight:700; color:#e53935;">{{RANK_RONBUN}}</span>】
+          </div>
+        </div>
+
+        <div style="
+        font-size: 12px;
+        color: rgba(0,0,0,0.45);
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+      ">
+          参照ページ：{{PAGE_CODE}}
+        </div>
+      </div>
+
+      <div style="
+      font-size: 14px;
+      line-height: 1.75;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(30,136,229,0.06);
+    ">
+        {{QUESTION}}
+      </div>
+    </div>
+
+  </div>
+
+</body>
+
+</html>

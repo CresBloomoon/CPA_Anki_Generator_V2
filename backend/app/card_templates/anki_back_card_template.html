@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="utf-8">
+  <title>CPA Anki Back Card Template</title>
+</head>
+
+<body>
+
+  <div style="
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+">
+
+    <div style="
+    border: 1px solid rgba(0,0,0,0.12);
+    border-left: 6px solid #1e88e5;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin: 10px 0 14px;
+    background: #ffffff;
+    color: #111111;
+    line-height: 1.6;
+  ">
+      <div style="font-weight:800; font-size:18px; margin-bottom:6px;">
+        {{TITLE}}
+      </div>
+
+      <div style="
+      font-size: 13px;
+      color: rgba(0,0,0,0.7);
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    ">
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+          <div>
+            【短答：<span style="font-weight:700; color:#e53935;">{{RANK_TANTO}}</span>】
+          </div>
+          <div>
+            【論文：<span style="font-weight:700; color:#e53935;">{{RANK_RONBUN}}</span>】
+          </div>
+        </div>
+
+        <div style="
+        font-size: 12px;
+        color: rgba(0,0,0,0.45);
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+      ">
+          参照ページ：{{PAGE_CODE}}
+        </div>
+      </div>
+
+      <div style="
+      font-size: 14px;
+      line-height: 1.75;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(30,136,229,0.06);
+    ">
+        {{QUESTION}}
+      </div>
+    </div>
+    <div style="margin: 18px 0 22px;">
+      <div style="margin-bottom: 10px;">
+        <div
+          style="display: inline-block; background: #1e88e5; color: #fff; font-weight: 700; padding: 6px 14px; border-radius: 8px; font-size: 14px;">
+          論証
+        </div>
+      </div>
+      <div onclick="copyBox(this)" style="
+      background: #fff;
+      color: #111;
+      border: 1px solid rgba(0,0,0,0.12);
+      border-left: 6px solid #1e88e5;
+      border-radius: 12px;
+      padding: 14px 16px;
+      line-height: 1.75;
+      font-size: 14px;
+      position: relative;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    ">
+        {{RONSHO_BODY}}
+        <div class="copy-overlay"></div>
+      </div>
+    </div>
+
+    <div style="margin: 18px 0 22px;">
+      <div style="margin-bottom: 10px;">
+        <div
+          style="display: inline-block; background: #43a047; color: #fff; font-weight: 700; padding: 6px 14px; border-radius: 8px; font-size: 14px;">
+          解説
+        </div>
+      </div>
+      <div onclick="copyBox(this)" style="
+      background: #fff;
+      color: #111;
+      border: 1px solid rgba(0,0,0,0.12);
+      border-left: 6px solid #43a047;
+      border-radius: 12px;
+      padding: 14px 16px;
+      line-height: 1.75;
+      font-size: 14px;
+      position: relative;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    ">
+        {{KAISETSU_BODY}}
+        <div class="copy-overlay"></div>
+      </div>
+    </div>
+
+    <div style="margin: 18px 0 22px;">
+      <div style="margin-bottom: 10px;">
+        <div
+          style="display: inline-block; background: #fb8c00; color: #fff; font-weight: 700; padding: 6px 14px; border-radius: 8px; font-size: 14px;">
+          要するに？
+        </div>
+      </div>
+      <div onclick="copyBox(this)" style="
+      background: #fff;
+      color: #111;
+      border: 1px solid rgba(0,0,0,0.12);
+      border-left: 6px solid #fb8c00;
+      border-radius: 12px;
+      padding: 14px 16px;
+      line-height: 1.75;
+      font-size: 14px;
+      position: relative;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    ">
+        {{YO_SURUNI_BODY}}
+        <div class="copy-overlay"></div>
+      </div>
+    </div>
+
+    <div style="margin: 18px 0 22px;">
+      <div style="margin-bottom: 10px;">
+        <div
+          style="display: inline-block; background: #e53935; color: #fff; font-weight: 700; padding: 6px 14px; border-radius: 8px; font-size: 14px;">
+          留意点
+        </div>
+      </div>
+      <div onclick="copyBox(this)" style="
+      background: #fff;
+      color: #111;
+      border: 1px solid rgba(0,0,0,0.12);
+      border-left: 6px solid #e53935;
+      border-radius: 12px;
+      padding: 14px 16px;
+      line-height: 1.75;
+      font-size: 14px;
+      position: relative;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    ">
+        {{RYUI_BODY}}
+        <div class="copy-overlay"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="_html2canvas.js"></script>
+  <script>
+    function copyBox(el) {
+      if (el.classList.contains('copy-success-active')) return;
+      if (typeof ClipboardItem === 'undefined' || !navigator.clipboard || !navigator.clipboard.write) {
+        var text = el.innerText || el.textContent;
+        if (el.childNodes && el.childNodes[0]) { text = el.childNodes[0].textContent.trim(); }
+        navigator.clipboard.writeText(text).then(function () {
+          el.classList.add('copy-success-active');
+          setTimeout(function () { el.classList.remove('copy-success-active'); }, 1000);
+        }).catch(function (err) { console.error(err); });
+        return;
+      }
+      var clipboardItem = new ClipboardItem({
+        "image/png": new Promise(async (resolve, reject) => {
+          try {
+            if (typeof html2canvas === 'undefined') { reject(); return; }
+            const canvas = await html2canvas(el, {
+              scale: 3, backgroundColor: "#ffffff", logging: false,
+              onclone: (clonedDoc) => {
+                const overlay = clonedDoc.querySelector('.copy-overlay');
+                if (overlay) overlay.style.display = 'none';
+              }
+            });
+            canvas.toBlob(blob => resolve(blob), "image/png");
+          } catch (err) { reject(err); }
+        })
+      });
+      navigator.clipboard.write([clipboardItem]).then(function () {
+        el.classList.add('copy-success-active');
+        setTimeout(function () { el.classList.remove('copy-success-active'); }, 1000);
+      }).catch(function (err) { console.error(err); });
+    }
+  </script>
+
+</body>
+
+</html>
