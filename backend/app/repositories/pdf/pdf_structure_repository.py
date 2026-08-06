@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import fitz  # PyMuPDF
 
 from app.domain.section import PageRange
+from app.repositories.pdf.dto import PdfParsingError, RawSection, ScanResult
 
 _ZENKAKU_DIGITS = "０１２３４５６７８９"
 _HANKAKU_DIGITS = "0123456789"
@@ -17,25 +18,6 @@ _DIGIT_TRANSLATION = str.maketrans(_ZENKAKU_DIGITS, _HANKAKU_DIGITS)
 # ＜はじめに＞, 序章, 補章, kanji-numeral headings, ...) are passed through
 # unchanged rather than forced into a shape they don't have.
 _LEADING_NUMBERED_PREFIX = re.compile(r"^第(\d+)([部編章節項款])(.*)$")
-
-
-class PdfParsingError(Exception):
-    """Raised when a PDF cannot be opened or parsed at all."""
-
-
-@dataclass(frozen=True)
-class RawSection:
-    title: str
-    ancestors: tuple[str, ...]
-    level: int
-    page_range: PageRange
-    source_file: str
-
-
-@dataclass(frozen=True)
-class ScanResult:
-    sections: tuple[RawSection, ...]
-    warnings: tuple[str, ...] = ()
 
 
 def _normalize_digits(text: str) -> str:
