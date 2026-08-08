@@ -49,3 +49,21 @@ class TestPromptBuilder:
         prompt = builder.build("本文", context)
 
         assert "ユーザーからの今回限定の追加指示" not in prompt
+
+    def test_section_title_is_included_when_not_split_into_blocks(self) -> None:
+        builder = PromptBuilder()
+        context = PromptContext(section_title="01節 会計の意義")
+
+        prompt = builder.build("本文", context)
+
+        assert "「01節 会計の意義」という節の全文です" in prompt
+
+    def test_block_position_is_included_when_split_into_blocks(self) -> None:
+        builder = PromptBuilder()
+        context = PromptContext(
+            section_title="01節 会計の意義", block_index=2, block_count=3
+        )
+
+        prompt = builder.build("本文", context)
+
+        assert "「01節 会計の意義」という節のうち、3分割中の2番目の抜粋です" in prompt

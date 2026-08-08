@@ -48,6 +48,7 @@ class PromptBuilder:
 {self._back_html}
 
 ---
+{self._build_section_context_line(prompt_context)}
 {anki_instructions}
 """
 
@@ -59,3 +60,15 @@ class PromptBuilder:
             )
 
         return prompt
+
+    def _build_section_context_line(self, prompt_context: PromptContext) -> str:
+        # Lets the AI know which section (and, when the section was split
+        # into blocks by sub-shredding, which block of how many) it is
+        # looking at. Kept out of anki_generation.md itself so that file
+        # stays exactly as ported from the legacy prompt contract.
+        if prompt_context.block_count is not None and prompt_context.block_count > 1:
+            return (
+                f"【節の情報】このテキストは「{prompt_context.section_title}」という節のうち、"
+                f"{prompt_context.block_count}分割中の{prompt_context.block_index}番目の抜粋です。"
+            )
+        return f"【節の情報】このテキストは「{prompt_context.section_title}」という節の全文です。"
