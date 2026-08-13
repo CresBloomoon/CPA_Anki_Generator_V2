@@ -30,6 +30,10 @@ def get_job_store() -> JobStore:
     return job_store
 
 
+def get_settings_repository() -> SettingsRepository:
+    return SettingsRepository()
+
+
 def _build_ai_repository(settings: AiProviderSettings) -> AiCardGeneratorRepository:
     # Split out from get_ai_card_generator_repository() so this
     # settings->repository->HTTP-error mapping can be unit tested directly,
