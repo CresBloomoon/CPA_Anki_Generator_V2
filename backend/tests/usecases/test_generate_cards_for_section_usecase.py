@@ -135,6 +135,28 @@ class TestGenerateCardsForSectionUsecase:
         assert cards == []
         assert ai_repo.calls == []
 
+    def test_additional_prompt_is_passed_through_to_prompt_context(self) -> None:
+        pdf_repo = _FakePdfStructureRepository(_build_marked_text(1))
+        ai_repo = _FakeAiRepository()
+        usecase = GenerateCardsForSectionUsecase(pdf_repo, ai_repo)
+
+        usecase.execute(
+            _make_section(), pdf_bytes=b"...", additional_prompt="具体例を厚めに"
+        )
+
+        _, context = ai_repo.calls[0]
+        assert context.additional_prompt == "具体例を厚めに"
+
+    def test_additional_prompt_defaults_to_empty_string(self) -> None:
+        pdf_repo = _FakePdfStructureRepository(_build_marked_text(1))
+        ai_repo = _FakeAiRepository()
+        usecase = GenerateCardsForSectionUsecase(pdf_repo, ai_repo)
+
+        usecase.execute(_make_section(), pdf_bytes=b"...")
+
+        _, context = ai_repo.calls[0]
+        assert context.additional_prompt == ""
+
     def test_open_ended_page_range_is_passed_through_to_extraction(self) -> None:
         pdf_repo = _FakePdfStructureRepository(_build_marked_text(2))
         ai_repo = _FakeAiRepository()

@@ -26,6 +26,7 @@ class SectionJob:
 class GenerationJob:
     job_id: str
     section_jobs: list[SectionJob]
+    additional_prompt: str = ""
 
     def __post_init__(self) -> None:
         if not self.job_id.strip():

@@ -49,6 +49,18 @@ class TestGenerationJobConstruction:
         with pytest.raises(ValueError):
             GenerationJob(job_id="job-1", section_jobs=[])
 
+    def test_additional_prompt_defaults_to_empty_string(self) -> None:
+        job = _make_job(1)
+        assert job.additional_prompt == ""
+
+    def test_additional_prompt_can_be_set_explicitly(self) -> None:
+        job = GenerationJob(
+            job_id="job-1",
+            section_jobs=[SectionJob(section=_make_section("01節"))],
+            additional_prompt="具体例を厚めに",
+        )
+        assert job.additional_prompt == "具体例を厚めに"
+
 
 class TestStateTransitions:
     def test_mark_running_from_pending_succeeds(self) -> None:

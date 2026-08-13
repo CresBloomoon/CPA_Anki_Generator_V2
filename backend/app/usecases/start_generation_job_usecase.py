@@ -23,10 +23,11 @@ class StartGenerationJobUsecase:
         self._pdf_store = pdf_store
         self._generate_cards_for_section_usecase = generate_cards_for_section_usecase
 
-    def execute(self, sections: list[Section]) -> str:
+    def execute(self, sections: list[Section], additional_prompt: str = "") -> str:
         job = GenerationJob(
             job_id=str(uuid.uuid4()),
             section_jobs=[SectionJob(section=section) for section in sections],
+            additional_prompt=additional_prompt,
         )
         self._job_store.save(job)
 
@@ -46,7 +47,7 @@ class StartGenerationJobUsecase:
             try:
                 pdf_bytes = self._pdf_store.get(section_job.section.source_file)
                 cards = self._generate_cards_for_section_usecase.execute(
-                    section_job.section, pdf_bytes
+                    section_job.section, pdf_bytes, job.additional_prompt
                 )
                 job.mark_done(index, cards)
             except Exception as exc:  # noqa: BLE001 - any failure aborts the batch

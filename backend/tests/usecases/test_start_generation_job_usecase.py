@@ -36,9 +36,13 @@ class _FakeGenerateCardsForSectionUsecase:
     def __init__(self, behavior) -> None:
         self._behavior = behavior
         self.calls: list[Section] = []
+        self.additional_prompts: list[str] = []
 
-    def execute(self, section: Section, pdf_bytes: bytes) -> list[Card]:
+    def execute(
+        self, section: Section, pdf_bytes: bytes, additional_prompt: str = ""
+    ) -> list[Card]:
         self.calls.append(section)
+        self.additional_prompts.append(additional_prompt)
         return self._behavior(section)
 
 
@@ -106,6 +110,29 @@ class TestRun:
         assert job.is_complete()
         assert len(job.collect_generated_cards()) == 2
 
+    def test_job_additional_prompt_is_forwarded_to_every_section_call(self) -> None:
+        section1 = _make_section("01節 A")
+        section2 = _make_section("02節 B")
+
+        def behavior(section: Section) -> list[Card]:
+            return [_make_card(f"card-{section.title}", section)]
+
+        job_store = JobStore()
+        pdf_store = PdfStore()
+        pdf_store.save("book.pdf", b"pdf-bytes")
+        fake_generate = _FakeGenerateCardsForSectionUsecase(behavior)
+        usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
+
+        job = GenerationJob(
+            job_id="job-1",
+            section_jobs=[SectionJob(section=section1), SectionJob(section=section2)],
+            additional_prompt="具体例を厚めに",
+        )
+
+        usecase.run(job)
+
+        assert fake_generate.additional_prompts == ["具体例を厚めに", "具体例を厚めに"]
+
 
 class TestExecute:
     def test_returns_a_job_id_and_registers_the_job_immediately(self) -> None:
@@ -133,3 +160,31 @@ class TestExecute:
 
         assert job.is_complete()
         assert len(job.collect_generated_cards()) == 1
+
+    def test_additional_prompt_defaults_to_empty_string_on_the_job(self) -> None:
+        section = _make_section("01節 A")
+        job_store = JobStore()
+        pdf_store = PdfStore()
+        pdf_store.save("book.pdf", b"pdf-bytes")
+        fake_generate = _FakeGenerateCardsForSectionUsecase(
+            lambda section: [_make_card("card-1", section)]
+        )
+        usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
+
+        job_id = usecase.execute([section])
+
+        assert job_store.get(job_id).additional_prompt == ""
+
+    def test_additional_prompt_is_stored_on_the_job_when_given(self) -> None:
+        section = _make_section("01節 A")
+        job_store = JobStore()
+        pdf_store = PdfStore()
+        pdf_store.save("book.pdf", b"pdf-bytes")
+        fake_generate = _FakeGenerateCardsForSectionUsecase(
+            lambda section: [_make_card("card-1", section)]
+        )
+        usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
+
+        job_id = usecase.execute([section], additional_prompt="具体例を厚めに")
+
+        assert job_store.get(job_id).additional_prompt == "具体例を厚めに"

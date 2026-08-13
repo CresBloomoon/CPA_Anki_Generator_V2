@@ -39,7 +39,9 @@ class GenerateCardsForSectionUsecase:
         self._pdf_structure_repository = pdf_structure_repository
         self._ai_repository = ai_repository
 
-    def execute(self, section: Section, pdf_bytes: bytes) -> list[Card]:
+    def execute(
+        self, section: Section, pdf_bytes: bytes, additional_prompt: str = ""
+    ) -> list[Card]:
         full_text = self._pdf_structure_repository.extract_text_from_range(
             pdf_bytes, section.page_range.start_page, section.page_range.end_page
         )
@@ -50,6 +52,7 @@ class GenerateCardsForSectionUsecase:
         for position, block_pages in enumerate(blocks, start=1):
             prompt_context = PromptContext(
                 section_title=section.title,
+                additional_prompt=additional_prompt,
                 block_index=position if total_blocks > 1 else None,
                 block_count=total_blocks if total_blocks > 1 else None,
             )
