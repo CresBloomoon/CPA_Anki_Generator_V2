@@ -3,10 +3,14 @@ import { scanPdfs, uploadPdf } from '../api/client'
 import type { ScanResponse } from '../api/types'
 
 interface UploadPanelProps {
+  onFilesUploaded: (sourceFiles: string[]) => void
   onScanComplete: (result: ScanResponse) => void
 }
 
-export function UploadPanel({ onScanComplete }: UploadPanelProps) {
+export function UploadPanel({
+  onFilesUploaded,
+  onScanComplete,
+}: UploadPanelProps) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [rootPath, setRootPath] = useState('')
   const [isScanning, setIsScanning] = useState(false)
@@ -24,6 +28,10 @@ export function UploadPanel({ onScanComplete }: UploadPanelProps) {
     try {
       const uploaded = await Promise.all(selectedFiles.map(uploadPdf))
       const sourceFiles = uploaded.map((result) => result.source_file)
+      // Reported even if the scan call below throws, so a file that was
+      // uploaded but produced e.g. a 422 is still available to attach to a
+      // manually-added row afterwards.
+      onFilesUploaded(sourceFiles)
       const scanResult = await scanPdfs(sourceFiles, rootPath.trim())
       onScanComplete(scanResult)
     } catch (err) {

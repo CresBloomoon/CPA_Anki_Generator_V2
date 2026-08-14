@@ -77,6 +77,35 @@ class TestScanPdfs:
         )
         assert section_titles["第01節 会計の意義"]["source_file"] == "book.pdf"
 
+    def test_scan_converts_end_page_to_the_inclusive_last_page_for_display(
+        self, client: TestClient
+    ) -> None:
+        # PdfStructureRepository internally computes end_page as the *next*
+        # section's start_page (exclusive -- see page_range_display.py).
+        # /scan must convert this to the section's own last page (inclusive)
+        # before it reaches the API, or adjacent sections appear to share a
+        # boundary page in the UI.
+        pdf_bytes = _build_fixture_pdf_with_toc()
+        client.post(
+            "/pdfs", files={"file": ("book.pdf", pdf_bytes, "application/pdf")}
+        )
+
+        response = client.post(
+            "/scan",
+            json={"source_files": ["book.pdf"], "root_path": "Root"},
+        )
+
+        section_titles = {s["title"]: s for s in response.json()["sections"]}
+        # 第01章 spans only page 1 (第01節 begins on page 2).
+        assert section_titles["第01章 総論"]["start_page"] == 1
+        assert section_titles["第01章 総論"]["end_page"] == 1
+        # 第01節 spans only page 2 (第02節 begins on page 3).
+        assert section_titles["第01節 会計の意義"]["start_page"] == 2
+        assert section_titles["第01節 会計の意義"]["end_page"] == 2
+        # 第02節 is the last TOC entry -- open-ended, stays None.
+        assert section_titles["第02節 会計公準"]["start_page"] == 3
+        assert section_titles["第02節 会計公準"]["end_page"] is None
+
     def test_scan_unknown_source_file_returns_404(self, client: TestClient) -> None:
         response = client.post(
             "/scan",

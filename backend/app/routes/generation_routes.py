@@ -9,6 +9,7 @@ from app.repositories.anki.anki_package_repository import AnkiPackageRepository
 from app.repositories.jobs.job_store import JobNotFoundError, JobStore
 from app.repositories.pdf.pdf_store import PdfStore
 from app.repositories.pdf.pdf_structure_repository import PdfStructureRepository
+from app.routes.page_range_display import to_internal_end_page
 from app.routes.schemas.generation import (
     GenerationJobStatusResponse,
     SectionJobStatusResponse,
@@ -42,7 +43,7 @@ def start_generation_job(
                 title=section_input.title,
                 page_range=PageRange(
                     start_page=section_input.start_page,
-                    end_page=section_input.end_page,
+                    end_page=to_internal_end_page(section_input.end_page),
                 ),
                 deck_path=DeckPath.from_string(section_input.deck_path),
                 source_file=section_input.source_file,

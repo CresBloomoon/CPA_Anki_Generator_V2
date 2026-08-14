@@ -237,6 +237,38 @@ class TestExtractTextFromRange:
         assert "--- ページ 3 ---" in text
         assert "--- ページ 4 ---" in text
 
+    def test_boundary_page_belongs_to_exactly_one_of_two_adjacent_sections(
+        self,
+    ) -> None:
+        # _finalize() sets a section's end_page to the *next* section's
+        # start_page (an exclusive boundary -- see the class-level design
+        # note in PdfStructureRepository.scan). This reproduces that exact
+        # shape for two adjacent sections sharing a boundary page (3) and
+        # confirms the page is neither duplicated across both nor lost
+        # from both.
+        pdf_bytes = self._build_fixture_pdf_with_text()
+        repository = PdfStructureRepository()
+
+        section_a_text = repository.extract_text_from_range(
+            pdf_bytes, start_page=1, end_page=3
+        )
+        section_b_text = repository.extract_text_from_range(
+            pdf_bytes, start_page=3, end_page=None
+        )
+
+        # Not duplicated: the boundary page (3) is absent from section A.
+        assert "PAGE 3 CONTENT" not in section_a_text
+
+        # Not lost: the boundary page is present in section B.
+        assert "PAGE 3 CONTENT" in section_b_text
+
+        # Not lost elsewhere either: pages 1-4 are covered exactly once
+        # each across the two sections combined.
+        assert "PAGE 1 CONTENT" in section_a_text
+        assert "PAGE 2 CONTENT" in section_a_text
+        assert "PAGE 4 CONTENT" not in section_a_text
+        assert "PAGE 4 CONTENT" in section_b_text
+
 
 class TestPdfParsingError:
     def test_scan_raises_on_invalid_pdf_bytes(self) -> None:

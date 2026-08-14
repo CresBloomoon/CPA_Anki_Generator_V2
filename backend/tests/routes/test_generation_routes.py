@@ -18,9 +18,13 @@ from app.repositories.pdf.pdf_store import PdfStore
 
 
 class _FakeAiRepository(AiCardGeneratorRepository):
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, PromptContext]] = []
+
     def generate_cards(
         self, section_text: str, prompt_context: PromptContext
     ) -> CardContent:
+        self.calls.append((section_text, prompt_context))
         item = CardContentItem(
             title="card",
             question="Q",
@@ -104,6 +108,53 @@ class TestStartGenerationJob:
 
         assert response.status_code == 200
         assert response.json()["job_id"]
+
+    def test_display_end_page_converts_back_to_the_correct_extraction_range(
+        self, client: TestClient
+    ) -> None:
+        # start_page=1, end_page=1 in the API's display semantics means
+        # "just page 1" (inclusive). This must round-trip back to the
+        # correct internal (exclusive) PageRange so extraction pulls in
+        # exactly page 1's text and nothing from page 2.
+        doc = fitz.open()
+        page1 = doc.new_page(width=595, height=842)
+        page1.insert_text((72, 72), "PAGE ONE CONTENT")
+        page2 = doc.new_page(width=595, height=842)
+        page2.insert_text((72, 72), "PAGE TWO CONTENT")
+        pdf_bytes = doc.tobytes()
+        doc.close()
+        client.post(
+            "/pdfs",
+            files={"file": ("two_pages.pdf", pdf_bytes, "application/pdf")},
+        )
+
+        fake_ai_repository = _FakeAiRepository()
+        app.dependency_overrides[get_ai_card_generator_repository] = (
+            lambda: fake_ai_repository
+        )
+
+        start_response = client.post(
+            "/generation-jobs",
+            json={
+                "sections": [
+                    {
+                        "title": "節1",
+                        "start_page": 1,
+                        "end_page": 1,
+                        "deck_path": "Root::節1",
+                        "source_file": "two_pages.pdf",
+                    }
+                ],
+                "additional_prompt": "",
+            },
+        )
+        job_id = start_response.json()["job_id"]
+        _wait_until_complete(client, job_id)
+
+        assert len(fake_ai_repository.calls) == 1
+        section_text, _ = fake_ai_repository.calls[0]
+        assert "PAGE ONE CONTENT" in section_text
+        assert "PAGE TWO CONTENT" not in section_text
 
     def test_invalid_deck_path_returns_422(self, client: TestClient) -> None:
         _upload_fixture_pdf(client)

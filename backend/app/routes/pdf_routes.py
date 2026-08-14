@@ -6,6 +6,7 @@ from app.dependencies import get_pdf_store
 from app.repositories.pdf.dto import PdfParsingError
 from app.repositories.pdf.pdf_store import PdfNotFoundError, PdfStore
 from app.repositories.pdf.pdf_structure_repository import PdfStructureRepository
+from app.routes.page_range_display import to_display_end_page
 from app.routes.schemas.pdf import (
     ScanRequest,
     ScanResponse,
@@ -58,7 +59,7 @@ def scan_pdfs(
             SectionScanResult(
                 title=section.title,
                 start_page=section.page_range.start_page,
-                end_page=section.page_range.end_page,
+                end_page=to_display_end_page(section.page_range.end_page),
                 deck_path=section.deck_path.joined(),
                 source_file=section.source_file,
             )
