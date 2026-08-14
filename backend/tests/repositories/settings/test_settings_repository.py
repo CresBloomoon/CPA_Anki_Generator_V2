@@ -28,7 +28,7 @@ class TestSettingsRepository:
         settings = repository.load()
 
         assert settings == AiProviderSettings(
-            provider="gemini", model_name="gemini-2.5-pro"
+            provider="gemini", model_name="gemini-2.5-flash"
         )
 
     def test_save_then_load_round_trips(self, tmp_path: Path) -> None:

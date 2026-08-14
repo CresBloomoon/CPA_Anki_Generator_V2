@@ -6,7 +6,7 @@ from pathlib import Path
 
 _DEFAULT_SETTINGS_PATH = Path(__file__).resolve().parents[3] / "settings.json"
 _DEFAULT_PROVIDER = "gemini"
-_DEFAULT_MODEL_NAME = "gemini-2.5-pro"
+_DEFAULT_MODEL_NAME = "gemini-2.5-flash"
 
 
 @dataclass(frozen=True)

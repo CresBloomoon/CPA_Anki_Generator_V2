@@ -26,7 +26,7 @@ class TestGetSettings:
         assert response.status_code == 200
         body = response.json()
         assert body["provider"] == "gemini"
-        assert body["model_name"] == "gemini-2.5-pro"
+        assert body["model_name"] == "gemini-2.5-flash"
 
 
 class TestUpdateSettings:
