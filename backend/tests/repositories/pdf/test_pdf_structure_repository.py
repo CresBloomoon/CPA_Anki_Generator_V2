@@ -194,6 +194,22 @@ class TestScanEndToEnd:
         assert all(s.source_file == "zaimu.pdf" for s in result.sections)
 
 
+class TestScanWithoutToc:
+    def test_scan_reports_a_warning_naming_the_source_file(self) -> None:
+        doc = fitz.open()
+        doc.new_page(width=595, height=842)
+        pdf_bytes = doc.tobytes()
+        doc.close()
+
+        repository = PdfStructureRepository()
+        result = repository.scan(pdf_bytes, source_file="no_toc.pdf")
+
+        assert result.sections == ()
+        assert result.warnings == (
+            "no_toc.pdf にはTOC（しおり）が見つかりませんでした",
+        )
+
+
 class TestExtractTextFromRange:
     def _build_fixture_pdf_with_text(self) -> bytes:
         doc = fitz.open()

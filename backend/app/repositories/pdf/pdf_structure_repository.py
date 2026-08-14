@@ -47,6 +47,13 @@ class PdfStructureRepository:
         try:
             warnings: list[str] = []
             sections = self._build_sections_from_toc(doc)
+            if not sections:
+                # A silent {"sections": [], "warnings": []} reads as "the
+                # button did nothing" from the UI. Naming the file makes it
+                # clear this is TOC-only detection (ADR 0001) working as
+                # designed, not a bug -- especially with multiple PDFs
+                # scanned together, where only some might lack a TOC.
+                warnings.append(f"{source_file} にはTOC（しおり）が見つかりませんでした")
             raw_sections = self._finalize(sections, source_file, warnings)
             return ScanResult(sections=tuple(raw_sections), warnings=tuple(warnings))
         finally:
