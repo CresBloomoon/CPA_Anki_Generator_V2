@@ -53,6 +53,10 @@ def scan_pdfs(
         result = usecase.execute(pdf_files, request.root_path)
     except PdfParsingError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ValueError as exc:
+        # e.g. DeckPath.from_string(root_path) rejecting a root_path that's
+        # empty (or entirely whitespace/"::") even after normalization.
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     return ScanResponse(
         sections=[

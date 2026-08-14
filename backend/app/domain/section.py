@@ -45,7 +45,20 @@ class DeckPath:
 
     @classmethod
     def from_string(cls, path: str) -> DeckPath:
-        return cls(tuple(path.split("::")))
+        # The only entry point for raw, human-typed text (a root path
+        # input, or an edited deck_path cell), as opposed to __post_init__
+        # and child(), which enforce the strict invariant for paths already
+        # assembled from known-good pieces. Trailing/leading/doubled "::"
+        # and stray whitespace are common typing accidents, not meaningful
+        # input, so they are normalized away here before the strict
+        # constructor runs. If nothing survives (e.g. "", "::", "   "),
+        # __post_init__'s "at least one segment" check raises as usual.
+        segments = tuple(
+            segment.strip()
+            for segment in path.strip().split("::")
+            if segment.strip()
+        )
+        return cls(segments)
 
     def child(self, segment: str) -> DeckPath:
         return DeckPath((*self.segments, segment))

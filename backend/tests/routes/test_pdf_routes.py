@@ -106,6 +106,41 @@ class TestScanPdfs:
         assert section_titles["第02節 会計公準"]["start_page"] == 3
         assert section_titles["第02節 会計公準"]["end_page"] is None
 
+    def test_scan_with_trailing_separator_in_root_path_succeeds(
+        self, client: TestClient
+    ) -> None:
+        # Regression test: Phase5-3's default root path input value has a
+        # trailing "::", which used to reach DeckPath.from_string()
+        # unnormalized and raise an uncaught ValueError -> 500.
+        pdf_bytes = _build_fixture_pdf_with_toc()
+        client.post(
+            "/pdfs", files={"file": ("book.pdf", pdf_bytes, "application/pdf")}
+        )
+
+        response = client.post(
+            "/scan",
+            json={"source_files": ["book.pdf"], "root_path": "公認会計士試験::"},
+        )
+
+        assert response.status_code == 200
+        deck_paths = {s["deck_path"] for s in response.json()["sections"]}
+        assert all(path.startswith("公認会計士試験::") for path in deck_paths)
+
+    def test_scan_with_blank_root_path_returns_422_not_500(
+        self, client: TestClient
+    ) -> None:
+        pdf_bytes = _build_fixture_pdf_with_toc()
+        client.post(
+            "/pdfs", files={"file": ("book.pdf", pdf_bytes, "application/pdf")}
+        )
+
+        response = client.post(
+            "/scan",
+            json={"source_files": ["book.pdf"], "root_path": "   "},
+        )
+
+        assert response.status_code == 422
+
     def test_scan_unknown_source_file_returns_404(self, client: TestClient) -> None:
         response = client.post(
             "/scan",

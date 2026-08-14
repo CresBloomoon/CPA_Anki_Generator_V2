@@ -109,6 +109,32 @@ class TestStartGenerationJob:
         assert response.status_code == 200
         assert response.json()["job_id"]
 
+    def test_deck_path_with_trailing_separator_succeeds(
+        self, client: TestClient
+    ) -> None:
+        # Regression test: a deck_path edited to end with "::" (e.g. copied
+        # from the root path input before Phase5-3's user-input normalization
+        # existed) used to raise an uncaught ValueError -> 500.
+        _upload_fixture_pdf(client)
+
+        response = client.post(
+            "/generation-jobs",
+            json={
+                "sections": [
+                    {
+                        "title": "01節 会計の意義",
+                        "start_page": 1,
+                        "end_page": None,
+                        "deck_path": "Root::01節 会計の意義::",
+                        "source_file": "book.pdf",
+                    }
+                ],
+                "additional_prompt": "",
+            },
+        )
+
+        assert response.status_code == 200
+
     def test_display_end_page_converts_back_to_the_correct_extraction_range(
         self, client: TestClient
     ) -> None:

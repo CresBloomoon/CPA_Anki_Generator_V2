@@ -45,6 +45,46 @@ class TestDeckPath:
         result = root.child("01章 総論").child("01節 会計の意義")
         assert result.joined() == "公認会計士試験::財務会計論::01章 総論::01節 会計の意義"
 
+    def test_child_with_blank_segment_still_raises(self) -> None:
+        # .child() builds from already-known-good pieces, so it must stay
+        # strict even though from_string() below is lenient about the same
+        # kind of malformed input.
+        root = DeckPath.from_string("公認会計士試験")
+        with pytest.raises(ValueError):
+            root.child("  ")
+
+    def test_child_with_embedded_separator_still_raises(self) -> None:
+        root = DeckPath.from_string("公認会計士試験")
+        with pytest.raises(ValueError):
+            root.child("財務会計論::理論")
+
+
+class TestDeckPathFromString:
+    def test_trailing_separator_is_dropped(self) -> None:
+        # The exact shape of Phase5-3's default root path input value.
+        assert DeckPath.from_string("公認会計士試験::").joined() == "公認会計士試験"
+
+    def test_leading_separator_is_dropped(self) -> None:
+        assert DeckPath.from_string("::公認会計士試験").joined() == "公認会計士試験"
+
+    def test_doubled_separator_collapses(self) -> None:
+        assert DeckPath.from_string("A::::B").joined() == "A::B"
+
+    def test_surrounding_and_internal_whitespace_is_stripped(self) -> None:
+        assert DeckPath.from_string("  A  ::  B  ").joined() == "A::B"
+
+    def test_empty_string_raises(self) -> None:
+        with pytest.raises(ValueError):
+            DeckPath.from_string("")
+
+    def test_whitespace_only_raises(self) -> None:
+        with pytest.raises(ValueError):
+            DeckPath.from_string("   ")
+
+    def test_separator_only_raises(self) -> None:
+        with pytest.raises(ValueError):
+            DeckPath.from_string("::")
+
 
 class TestSection:
     def _make_section(self, **overrides: object) -> Section:
