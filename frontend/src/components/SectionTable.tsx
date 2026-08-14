@@ -1,3 +1,4 @@
+import { PlusIcon, TrashIcon } from './icons'
 import { createId } from '../utils/id'
 
 // This component owns the shape of a row (SectionRow), not just the
@@ -164,9 +165,11 @@ export function SectionTable({
                   <button
                     type="button"
                     onClick={() => deleteRow(row.id)}
-                    className="text-red-600"
+                    aria-label="この行を削除"
+                    title="この行を削除"
+                    className="text-red-600 hover:text-red-800"
                   >
-                    削除
+                    <TrashIcon />
                   </button>
                 </td>
               </tr>
@@ -184,8 +187,9 @@ export function SectionTable({
       <button
         type="button"
         onClick={addRow}
-        className="mt-2 rounded border border-gray-300 px-3 py-1 text-sm"
+        className="mt-2 flex items-center gap-1 rounded border border-gray-300 px-3 py-1 text-sm"
       >
+        <PlusIcon />
         行を追加
       </button>
     </div>

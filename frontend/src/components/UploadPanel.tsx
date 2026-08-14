@@ -12,7 +12,7 @@ export function UploadPanel({
   onScanComplete,
 }: UploadPanelProps) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
-  const [rootPath, setRootPath] = useState('')
+  const [rootPath, setRootPath] = useState('公認会計士試験::')
   const [isScanning, setIsScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
