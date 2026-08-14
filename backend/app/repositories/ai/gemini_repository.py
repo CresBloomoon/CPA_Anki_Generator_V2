@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 
 from google import genai
@@ -10,6 +11,8 @@ from app.repositories.ai.base import AiCardGeneratorRepository
 from app.repositories.ai.dto import PromptContext
 from app.repositories.ai.json_repair import extract_cards_from_json
 from app.repositories.ai.prompt_builder import PromptBuilder
+
+logger = logging.getLogger(__name__)
 
 _RATE_LIMIT_MARKERS = ("429", "RESOURCE_EXHAUSTED", "Quota exceeded")
 _AUTH_ERROR_MARKERS = (
@@ -88,6 +91,13 @@ class GeminiRepository(AiCardGeneratorRepository):
 
         last_error: Exception | None = None
         for attempt in range(self._max_retries):
+            logger.info(
+                "Gemini API呼び出し試行 %d/%d（model=%s）",
+                attempt + 1,
+                self._max_retries,
+                self._model_name,
+            )
+            call_started_at = time.monotonic()
             try:
                 response = self._client.models.generate_content(
                     model=self._model_name,
@@ -97,11 +107,18 @@ class GeminiRepository(AiCardGeneratorRepository):
                         temperature=0.0,
                     ),
                 )
+                logger.info(
+                    "Gemini API呼び出し成功（試行 %d/%d、%.1f秒）",
+                    attempt + 1,
+                    self._max_retries,
+                    time.monotonic() - call_started_at,
+                )
                 raw_cards = extract_cards_from_json(response.text)
                 return CardContent(
                     items=tuple(_to_card_content_item(card) for card in raw_cards)
                 )
             except Exception as exc:  # noqa: BLE001 - classified below
+                call_elapsed = time.monotonic() - call_started_at
                 if _is_auth_error(exc):
                     raise GeminiAuthenticationError(
                         f"Gemini APIの認証・権限エラーです（リトライしません）: {exc}"
@@ -110,11 +127,26 @@ class GeminiRepository(AiCardGeneratorRepository):
                 last_error = exc
                 is_last_attempt = attempt >= self._max_retries - 1
                 if is_last_attempt:
+                    logger.warning(
+                        "Gemini API呼び出し失敗（試行 %d/%d、%.1f秒、リトライ上限到達）: %s",
+                        attempt + 1,
+                        self._max_retries,
+                        call_elapsed,
+                        exc,
+                    )
                     break
                 delay = (
                     self._base_delay_seconds * (2**attempt) + 5
                     if _is_rate_limit_error(exc)
                     else 5
+                )
+                logger.warning(
+                    "Gemini API呼び出し失敗（試行 %d/%d、%.1f秒）: %s。%.0f秒後にリトライします",
+                    attempt + 1,
+                    self._max_retries,
+                    call_elapsed,
+                    exc,
+                    delay,
                 )
                 time.sleep(delay)
 

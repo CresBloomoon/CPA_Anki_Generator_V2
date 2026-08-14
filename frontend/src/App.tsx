@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { UploadPanel } from './components/UploadPanel'
 import { SectionTable, type SectionRow } from './components/SectionTable'
+import { GenerationProgress } from './components/GenerationProgress'
 import type { ScanResponse, SectionScanResult } from './api/types'
 import { createId } from './utils/id'
 
@@ -72,6 +73,8 @@ function App() {
         onRowsChange={setRows}
         sourceFileOptions={uploadedSourceFiles}
       />
+
+      <GenerationProgress rows={rows} />
     </div>
   )
 }

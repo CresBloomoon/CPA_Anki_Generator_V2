@@ -1,4 +1,16 @@
-import type { ScanResponse, UploadPdfResponse } from './types'
+import type {
+  GenerationJobStatusResponse,
+  ScanResponse,
+  SectionInput,
+  StartGenerationJobResponse,
+  UploadPdfResponse,
+} from './types'
+
+// Thrown specifically for a 404 on GET /generation-jobs/{id}, so callers
+// can distinguish "this job no longer exists" (JobStore is in-memory only,
+// so a backend restart mid-generation loses it -- retrying is pointless)
+// from a transient network/connection failure (worth retrying).
+export class GenerationJobNotFoundError extends Error {}
 
 async function extractErrorMessage(response: Response): Promise<string> {
   try {
@@ -43,4 +55,41 @@ export async function scanPdfs(
   }
 
   return response.json() as Promise<ScanResponse>
+}
+
+export async function startGenerationJob(
+  sections: SectionInput[],
+  additionalPrompt: string,
+): Promise<StartGenerationJobResponse> {
+  const response = await fetch('/generation-jobs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sections,
+      additional_prompt: additionalPrompt,
+    }),
+  })
+
+  if (!response.ok) {
+    throw new Error(await extractErrorMessage(response))
+  }
+
+  return response.json() as Promise<StartGenerationJobResponse>
+}
+
+export async function getGenerationJobStatus(
+  jobId: string,
+): Promise<GenerationJobStatusResponse> {
+  const response = await fetch(
+    `/generation-jobs/${encodeURIComponent(jobId)}`,
+  )
+
+  if (response.status === 404) {
+    throw new GenerationJobNotFoundError(await extractErrorMessage(response))
+  }
+  if (!response.ok) {
+    throw new Error(await extractErrorMessage(response))
+  }
+
+  return response.json() as Promise<GenerationJobStatusResponse>
 }

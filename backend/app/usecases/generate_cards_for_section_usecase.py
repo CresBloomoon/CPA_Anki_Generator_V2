@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import re
+import time
 from typing import Protocol
 
 from app.domain.card import Card
@@ -15,6 +17,8 @@ _SPLIT_THRESHOLD_PAGES = 5
 _MAX_PAGES_PER_BLOCK = 4
 
 _PAGE_MARKER_PATTERN = re.compile(r"--- ページ \d+ ---")
+
+logger = logging.getLogger(__name__)
 
 
 class SupportsExtractText(Protocol):
@@ -56,12 +60,25 @@ class GenerateCardsForSectionUsecase:
                 block_index=position if total_blocks > 1 else None,
                 block_count=total_blocks if total_blocks > 1 else None,
             )
+            logger.info(
+                "[%s] ブロック %d/%d 処理開始", section.title, position, total_blocks
+            )
+            started_at = time.monotonic()
             # Any failure here (AI error, unrecoverable JSON, ...) is
             # intentionally left to propagate -- deciding whether to abort
             # the rest of the job or keep sections already completed is
             # Phase3-3's job, not this usecase's.
             card_content = self._ai_repository.generate_cards(
                 "".join(block_pages), prompt_context
+            )
+            elapsed_seconds = time.monotonic() - started_at
+            logger.info(
+                "[%s] ブロック %d/%d 完了、%d件生成（%.1f秒）",
+                section.title,
+                position,
+                total_blocks,
+                len(card_content.items),
+                elapsed_seconds,
             )
             for item in card_content.items:
                 cards.append(

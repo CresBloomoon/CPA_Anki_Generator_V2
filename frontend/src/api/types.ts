@@ -18,3 +18,37 @@ export interface ScanResponse {
   sections: SectionScanResult[]
   warnings: string[]
 }
+
+// Mirrors backend/app/routes/schemas/generation.py.
+
+export interface SectionInput {
+  title: string
+  start_page: number
+  end_page: number | null
+  deck_path: string
+  source_file: string
+}
+
+export interface StartGenerationRequest {
+  sections: SectionInput[]
+  additional_prompt: string
+}
+
+export interface StartGenerationJobResponse {
+  job_id: string
+}
+
+export type SectionJobStatus = 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED'
+
+export interface SectionJobStatusResponse {
+  title: string
+  status: SectionJobStatus
+  card_count: number
+  error_message: string | null
+}
+
+export interface GenerationJobStatusResponse {
+  job_id: string
+  is_complete: boolean
+  section_jobs: SectionJobStatusResponse[]
+}
