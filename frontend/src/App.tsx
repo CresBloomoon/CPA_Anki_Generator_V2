@@ -2,7 +2,12 @@ import { useState } from 'react'
 import { UploadPanel } from './components/UploadPanel'
 import { SectionTable, type SectionRow } from './components/SectionTable'
 import { GenerationProgress } from './components/GenerationProgress'
-import type { ScanResponse, SectionScanResult } from './api/types'
+import { DownloadButton } from './components/DownloadButton'
+import type {
+  GenerationJobStatusResponse,
+  ScanResponse,
+  SectionScanResult,
+} from './api/types'
 import { createId } from './utils/id'
 
 function toSectionRow(section: SectionScanResult): SectionRow {
@@ -22,6 +27,8 @@ function App() {
   const [warnings, setWarnings] = useState<string[]>([])
   const [uploadedSourceFiles, setUploadedSourceFiles] = useState<string[]>([])
   const [hasScanned, setHasScanned] = useState(false)
+  const [generationStatus, setGenerationStatus] =
+    useState<GenerationJobStatusResponse | null>(null)
 
   function handleFilesUploaded(sourceFiles: string[]) {
     setUploadedSourceFiles((prev) =>
@@ -74,7 +81,9 @@ function App() {
         sourceFileOptions={uploadedSourceFiles}
       />
 
-      <GenerationProgress rows={rows} />
+      <GenerationProgress rows={rows} onStatusChange={setGenerationStatus} />
+
+      <DownloadButton status={generationStatus} />
     </div>
   )
 }

@@ -93,3 +93,34 @@ export async function getGenerationJobStatus(
 
   return response.json() as Promise<GenerationJobStatusResponse>
 }
+
+export interface DownloadedFile {
+  blob: Blob
+  filename: string
+}
+
+function extractFilename(response: Response, fallback: string): string {
+  const disposition = response.headers.get('Content-Disposition')
+  if (!disposition) return fallback
+  const match = /filename="([^"]+)"/.exec(disposition)
+  return match ? match[1] : fallback
+}
+
+export async function downloadGenerationJobPackage(
+  jobId: string,
+): Promise<DownloadedFile> {
+  const response = await fetch(
+    `/generation-jobs/${encodeURIComponent(jobId)}/download`,
+  )
+
+  if (response.status === 404) {
+    throw new GenerationJobNotFoundError(await extractErrorMessage(response))
+  }
+  if (!response.ok) {
+    throw new Error(await extractErrorMessage(response))
+  }
+
+  const blob = await response.blob()
+  const filename = extractFilename(response, 'generated.apkg')
+  return { blob, filename }
+}
