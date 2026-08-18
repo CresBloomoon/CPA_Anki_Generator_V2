@@ -1,6 +1,6 @@
 # CPA Anki Generator V2 — Step → Phase 実装計画
 
-（Claude Code が /home/node/.claude/plans/precious-splashing-quill.md に生成し、承認済みの計画のバックアップ。全34Phase。Phase5-3〜5-11はPhase5-1・5-2の実機検証を踏まえて後日追加。）
+（Claude Code が /home/node/.claude/plans/precious-splashing-quill.md に生成し、承認済みの計画のバックアップ。全36Phase。Phase5-3〜5-11はPhase5-1・5-2の実機検証を踏まえて後日追加。Phase5-14・5-15はPhase5-7の設計検討中に見つかった別件の改善要望を末尾に追加したもの。）
 
 ## Context
 
@@ -413,6 +413,45 @@ table-layout: fixedで列幅を可変にする。列幅はcolumnWidths: Record<�
 ### Phase5-13（旧Phase5-6、任意・後回し、Phase2-7に連動）: ルートパス欄への科目自動サジェスト
 - 実装物：Phase2-7が実装された場合に、スキャン結果から推定科目をルートパス欄にプリフィル表示
 
+### Phase5-14: セクションテーブルの全選択/全解除チェックボックス
+- 経緯：Phase5-7（列幅調整）の設計中に、まーくんから別件の改善要望として追加された。
+Phase5-7とは関心事が異なる（見た目のレイアウト調整 vs 選択ロジックの変更）ため、既存の
+Phase番号はスライドさせず末尾に追加した。
+- 実装物：SectionTable.tsxのチェックボックス列ヘッダーに、行の選択状態と連動する
+全選択/全解除チェックボックスを追加する。
+  - 3状態の判定はrowsから毎回導出する（新規stateは持たない）：
+    `allSelected = rows.length > 0 && rows.every(r => r.selected)`、
+    `someSelected = rows.some(r => r.selected)`。
+  - 中間状態（indeterminate）はReactのJSX propとして直接指定できないDOMプロパティのため、
+    useRef+useEffectで`ref.current.indeterminate = someSelected && !allSelected`を
+    命令的に設定する。
+  - クリック時の挙動：`allSelected`がfalse（未選択または一部選択）のときクリックで全選択、
+    trueのときクリックで全解除。
+- 依存：Phase5-2
+- Done when：全行未選択→未チェック、一部選択→中間状態（四角にスラッシュの見た目）、
+全行選択→チェック済み、の3状態が正しく表示され、クリックで意図通り全選択/全解除が
+切り替わる
+
+### Phase5-15: インタラクティブ要素のサイズ拡大+共通スタイル定数の導入
+- 経緯：Phase5-14の設計中に、まーくんから別件の改善要望として追加された。フロントエンド
+全体を横断する視覚的な変更（1コンポーネントに閉じない）のため、独立したPhaseとして
+末尾に追加した。
+- 実装物：
+  - `frontend/src/styles.ts`（新規）：ボタン・入力欄・チェックボックスのサイズ・余白・
+    角丸・disabled表現を集約した共有クラス文字列定数（`primaryButtonClasses`／
+    `secondaryButtonClasses`／`iconButtonClasses`／`textInputClasses`／
+    `tableFieldClasses`／`checkboxClasses`）。色（`bg-blue-600`等）や幅指定
+    （`w-48`等）は用途ごとに意味が異なるため、各呼び出し側に残す。
+  - `UploadPanel.tsx`／`SectionTable.tsx`／`GenerationProgress.tsx`／
+    `DownloadButton.tsx`／`App.tsx`：ボタン・テキスト入力欄・セレクト・チェック
+    ボックスの`className`を上記の共有定数を使う形に置き換え、既存より一回り
+    大きいサイズ（padding拡大、チェックボックスは明示的に`h-5 w-5`を指定）にする。
+    フォントサイズ（`text-sm`等）自体は変更しない。
+- 依存：Phase5-2, Phase5-14（Phase5-14で追加される全選択チェックボックスにも
+`checkboxClasses`を適用するため、後で実施する）
+- Done when：対象の全ボタン・入力欄・チェックボックスが一回り大きく表示され、
+文字サイズ自体は変わっていないことを確認する
+
 ---
 ## Step 6: 結合＆実PDF検証
 
@@ -447,4 +486,4 @@ Clipboard画像非対応環境ではテキストコピーにフォールバッ�
 （Phase2-6）
 
 ---
-（全34Phaseがタスクとして登録済み。任意Phase 2-7/2-8/2-9/5-12/5-13は除外、必要になった時点で追加）
+（全36Phaseがタスクとして登録済み。任意Phase 2-7/2-8/2-9/5-12/5-13は除外、必要になった時点で追加）
