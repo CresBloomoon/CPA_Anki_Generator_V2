@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PlusIcon, TrashIcon } from './icons'
 import { createId } from '../utils/id'
 
@@ -23,6 +23,45 @@ interface SectionTableProps {
 }
 
 const DECK_PATH_DATALIST_ID = 'section-table-deck-path-options'
+
+// Only the columns holding actual data are resizable -- the checkbox and
+// delete-button columns are fixed-size icon columns with nothing to
+// resize. Kept as a single Record (rather than five separate useState
+// calls) so this can later be swapped for a value loaded from/saved to a
+// backend without restructuring the component (see Phase5-7 plan entry).
+type ColumnKey = 'title' | 'start_page' | 'end_page' | 'deck_path' | 'source_file'
+
+const DEFAULT_COLUMN_WIDTHS: Record<ColumnKey, number> = {
+  title: 192,
+  start_page: 80,
+  end_page: 96,
+  deck_path: 256,
+  source_file: 160,
+}
+
+const FIXED_ICON_COLUMN_WIDTH = 40
+const MIN_COLUMN_WIDTH = 40
+
+// Defined at module scope (not inside SectionTable) so it isn't recreated
+// -- and its DOM node remounted -- on every render.
+//
+// The outer div is the drag hit area (wider than the visible line, so it's
+// easy to grab) and carries `group` so hovering anywhere in it -- not just
+// over the thin inner line -- highlights that line via `group-hover`.
+function ResizeHandle({
+  onMouseDown,
+}: {
+  onMouseDown: (event: React.MouseEvent) => void
+}) {
+  return (
+    <div
+      onMouseDown={onMouseDown}
+      className="group absolute right-0 top-0 flex h-full w-3 cursor-col-resize select-none items-center justify-center"
+    >
+      <div className="h-full w-1 bg-gray-300 group-hover:bg-blue-400" />
+    </div>
+  )
+}
 
 export function SectionTable({
   rows,
@@ -49,6 +88,30 @@ export function SectionTable({
   function toggleSelectAll() {
     const nextSelected = !allSelected
     onRowsChange(rows.map((row) => ({ ...row, selected: nextSelected })))
+  }
+
+  const [columnWidths, setColumnWidths] = useState(DEFAULT_COLUMN_WIDTHS)
+
+  function startResize(columnKey: ColumnKey, event: React.MouseEvent) {
+    event.preventDefault()
+    const startX = event.clientX
+    const startWidth = columnWidths[columnKey]
+
+    function handleMouseMove(moveEvent: MouseEvent) {
+      const delta = moveEvent.clientX - startX
+      setColumnWidths((prev) => ({
+        ...prev,
+        [columnKey]: Math.max(MIN_COLUMN_WIDTH, startWidth + delta),
+      }))
+    }
+
+    function handleMouseUp() {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
   }
 
   function updateRow(id: string, patch: Partial<SectionRow>) {
@@ -79,7 +142,19 @@ export function SectionTable({
   return (
     <div className="mt-4">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-max border-collapse text-sm">
+        <table
+          className="w-full min-w-max border-collapse text-sm"
+          style={{ tableLayout: 'fixed' }}
+        >
+          <colgroup>
+            <col style={{ width: FIXED_ICON_COLUMN_WIDTH }} />
+            <col style={{ width: columnWidths.title }} />
+            <col style={{ width: columnWidths.start_page }} />
+            <col style={{ width: columnWidths.end_page }} />
+            <col style={{ width: columnWidths.deck_path }} />
+            <col style={{ width: columnWidths.source_file }} />
+            <col style={{ width: FIXED_ICON_COLUMN_WIDTH }} />
+          </colgroup>
           <thead>
             <tr className="border-b border-gray-300 text-left">
               <th className="p-2">
@@ -92,11 +167,34 @@ export function SectionTable({
                   title="全選択/全解除"
                 />
               </th>
-              <th className="p-2">節タイトル</th>
-              <th className="p-2">開始ページ</th>
-              <th className="p-2">終了ページ</th>
-              <th className="p-2">出力デッキ名</th>
-              <th className="p-2">ソースファイル</th>
+              <th className="relative p-2">
+                節タイトル
+                <ResizeHandle onMouseDown={(e) => startResize('title', e)} />
+              </th>
+              <th className="relative p-2">
+                開始ページ
+                <ResizeHandle
+                  onMouseDown={(e) => startResize('start_page', e)}
+                />
+              </th>
+              <th className="relative p-2">
+                終了ページ
+                <ResizeHandle
+                  onMouseDown={(e) => startResize('end_page', e)}
+                />
+              </th>
+              <th className="relative p-2">
+                出力デッキ名
+                <ResizeHandle
+                  onMouseDown={(e) => startResize('deck_path', e)}
+                />
+              </th>
+              <th className="relative p-2">
+                ソースファイル
+                <ResizeHandle
+                  onMouseDown={(e) => startResize('source_file', e)}
+                />
+              </th>
               <th className="p-2"></th>
             </tr>
           </thead>
@@ -119,7 +217,7 @@ export function SectionTable({
                     onChange={(event) =>
                       updateRow(row.id, { title: event.target.value })
                     }
-                    className="w-48 rounded border border-gray-300 px-1 py-0.5"
+                    className="w-full rounded border border-gray-300 px-1 py-0.5"
                   />
                 </td>
                 <td className="p-2">
@@ -132,7 +230,7 @@ export function SectionTable({
                         start_page: Number(event.target.value),
                       })
                     }
-                    className="w-20 rounded border border-gray-300 px-1 py-0.5"
+                    className="w-full rounded border border-gray-300 px-1 py-0.5"
                   />
                 </td>
                 <td className="p-2">
@@ -149,7 +247,7 @@ export function SectionTable({
                       })
                     }
                     placeholder="(文末まで)"
-                    className="w-24 rounded border border-gray-300 px-1 py-0.5"
+                    className="w-full rounded border border-gray-300 px-1 py-0.5"
                   />
                 </td>
                 <td className="p-2">
@@ -160,7 +258,7 @@ export function SectionTable({
                     onChange={(event) =>
                       updateRow(row.id, { deck_path: event.target.value })
                     }
-                    className="w-64 rounded border border-gray-300 px-1 py-0.5"
+                    className="w-full rounded border border-gray-300 px-1 py-0.5"
                   />
                 </td>
                 <td className="p-2">
@@ -169,7 +267,7 @@ export function SectionTable({
                     onChange={(event) =>
                       updateRow(row.id, { source_file: event.target.value })
                     }
-                    className="rounded border border-gray-300 px-1 py-0.5"
+                    className="w-full rounded border border-gray-300 px-1 py-0.5"
                   >
                     <option value="">-- 選択してください --</option>
                     {/* A manually-picked file from a previous session might
