@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { PlusIcon, TrashIcon } from './icons'
 import { createId } from '../utils/id'
 
@@ -32,6 +33,24 @@ export function SectionTable({
     new Set(rows.map((row) => row.deck_path).filter((path) => path !== '')),
   )
 
+  const allSelected = rows.length > 0 && rows.every((row) => row.selected)
+  const someSelected = rows.some((row) => row.selected)
+
+  // The checkbox's indeterminate visual state is a DOM property, not an
+  // HTML attribute -- React has no JSX prop for it, so it must be set
+  // imperatively on the actual <input> element.
+  const selectAllRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someSelected && !allSelected
+    }
+  }, [someSelected, allSelected])
+
+  function toggleSelectAll() {
+    const nextSelected = !allSelected
+    onRowsChange(rows.map((row) => ({ ...row, selected: nextSelected })))
+  }
+
   function updateRow(id: string, patch: Partial<SectionRow>) {
     onRowsChange(
       rows.map((row) => (row.id === id ? { ...row, ...patch } : row)),
@@ -63,7 +82,16 @@ export function SectionTable({
         <table className="w-full min-w-max border-collapse text-sm">
           <thead>
             <tr className="border-b border-gray-300 text-left">
-              <th className="p-2"></th>
+              <th className="p-2">
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleSelectAll}
+                  aria-label="全選択/全解除"
+                  title="全選択/全解除"
+                />
+              </th>
               <th className="p-2">節タイトル</th>
               <th className="p-2">開始ページ</th>
               <th className="p-2">終了ページ</th>
