@@ -9,6 +9,7 @@ import type {
   SectionScanResult,
 } from './api/types'
 import { createId } from './utils/id'
+import { secondaryButtonClasses } from './styles'
 
 function toSectionRow(section: SectionScanResult): SectionRow {
   return {
@@ -92,7 +93,7 @@ function App() {
               ? '生成が完了するまでリセットできません'
               : undefined
           }
-          className="rounded border border-gray-300 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+          className={secondaryButtonClasses}
         >
           リセット
         </button>

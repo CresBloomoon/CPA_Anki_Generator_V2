@@ -10,6 +10,7 @@ import type {
   SectionJobStatus,
 } from '../api/types'
 import type { SectionRow } from './SectionTable'
+import { primaryButtonClasses } from '../styles'
 
 const POLL_INTERVAL_MS = 2000
 // At the poll interval above, 10 consecutive failures is ~20 seconds --
@@ -146,7 +147,7 @@ export function GenerationProgress({
         type="button"
         onClick={handleStart}
         disabled={!canStart}
-        className="self-start rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+        className={`self-start bg-blue-600 ${primaryButtonClasses}`}
       >
         {isStarting
           ? '生成を開始しています...'

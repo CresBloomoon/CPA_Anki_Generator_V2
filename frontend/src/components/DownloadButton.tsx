@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { downloadGenerationJobPackage } from '../api/client'
 import type { GenerationJobStatusResponse } from '../api/types'
+import { primaryButtonClasses } from '../styles'
 
 interface DownloadButtonProps {
   status: GenerationJobStatusResponse | null
@@ -50,7 +51,7 @@ export function DownloadButton({ status }: DownloadButtonProps) {
         type="button"
         onClick={handleDownload}
         disabled={isDownloading}
-        className="self-start rounded bg-green-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+        className={`self-start bg-green-600 ${primaryButtonClasses}`}
       >
         {isDownloading
           ? 'ダウンロード中...'

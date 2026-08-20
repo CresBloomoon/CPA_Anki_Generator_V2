@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { PlusIcon, TrashIcon } from './icons'
 import { createId } from '../utils/id'
+import {
+  checkboxClasses,
+  iconButtonClasses,
+  secondaryButtonClasses,
+  tableFieldClasses,
+} from '../styles'
 
 // This component owns the shape of a row (SectionRow), not just the
 // backend's ScanResponse shape: `id` (for stable React keys and immutable
@@ -165,6 +171,7 @@ export function SectionTable({
                   onChange={toggleSelectAll}
                   aria-label="全選択/全解除"
                   title="全選択/全解除"
+                  className={checkboxClasses}
                 />
               </th>
               <th className="relative p-2">
@@ -208,6 +215,7 @@ export function SectionTable({
                     onChange={(event) =>
                       updateRow(row.id, { selected: event.target.checked })
                     }
+                    className={checkboxClasses}
                   />
                 </td>
                 <td className="p-2">
@@ -217,7 +225,7 @@ export function SectionTable({
                     onChange={(event) =>
                       updateRow(row.id, { title: event.target.value })
                     }
-                    className="w-full rounded border border-gray-300 px-1 py-0.5"
+                    className={`w-full ${tableFieldClasses}`}
                   />
                 </td>
                 <td className="p-2">
@@ -230,7 +238,7 @@ export function SectionTable({
                         start_page: Number(event.target.value),
                       })
                     }
-                    className="w-full rounded border border-gray-300 px-1 py-0.5"
+                    className={`w-full ${tableFieldClasses}`}
                   />
                 </td>
                 <td className="p-2">
@@ -247,7 +255,7 @@ export function SectionTable({
                       })
                     }
                     placeholder="(文末まで)"
-                    className="w-full rounded border border-gray-300 px-1 py-0.5"
+                    className={`w-full ${tableFieldClasses}`}
                   />
                 </td>
                 <td className="p-2">
@@ -258,7 +266,7 @@ export function SectionTable({
                     onChange={(event) =>
                       updateRow(row.id, { deck_path: event.target.value })
                     }
-                    className="w-full rounded border border-gray-300 px-1 py-0.5"
+                    className={`w-full ${tableFieldClasses}`}
                   />
                 </td>
                 <td className="p-2">
@@ -267,7 +275,7 @@ export function SectionTable({
                     onChange={(event) =>
                       updateRow(row.id, { source_file: event.target.value })
                     }
-                    className="w-full rounded border border-gray-300 px-1 py-0.5"
+                    className={`w-full ${tableFieldClasses}`}
                   >
                     <option value="">-- 選択してください --</option>
                     {/* A manually-picked file from a previous session might
@@ -293,7 +301,7 @@ export function SectionTable({
                     onClick={() => deleteRow(row.id)}
                     aria-label="この行を削除"
                     title="この行を削除"
-                    className="text-red-600 hover:text-red-800"
+                    className={`text-red-600 hover:text-red-800 ${iconButtonClasses}`}
                   >
                     <TrashIcon />
                   </button>
@@ -313,7 +321,7 @@ export function SectionTable({
       <button
         type="button"
         onClick={addRow}
-        className="mt-2 flex items-center gap-1 rounded border border-gray-300 px-3 py-1 text-sm"
+        className={`mt-2 flex items-center gap-1 ${secondaryButtonClasses}`}
       >
         <PlusIcon />
         行を追加

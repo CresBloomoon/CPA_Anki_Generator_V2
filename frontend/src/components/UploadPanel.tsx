@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { scanPdfs, uploadPdf } from '../api/client'
 import type { ScanResponse } from '../api/types'
+import { primaryButtonClasses, textInputClasses } from '../styles'
 
 interface UploadPanelProps {
   onFilesUploaded: (sourceFiles: string[]) => void
@@ -72,7 +73,7 @@ export function UploadPanel({
           value={rootPath}
           onChange={(event) => setRootPath(event.target.value)}
           placeholder="公認会計士試験::財務会計論::理論"
-          className="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm"
+          className={`mt-1 block w-full ${textInputClasses}`}
         />
       </div>
 
@@ -80,7 +81,7 @@ export function UploadPanel({
         type="button"
         onClick={handleScan}
         disabled={!canScan}
-        className="self-start rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+        className={`self-start bg-blue-600 ${primaryButtonClasses}`}
       >
         {isScanning ? 'スキャン中...' : 'スキャン開始'}
       </button>
