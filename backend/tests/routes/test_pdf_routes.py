@@ -1,16 +1,27 @@
+from pathlib import Path
+
 import fitz
 import pytest
 from fastapi.testclient import TestClient
 
-from app.dependencies import get_pdf_store
+from app.dependencies import get_pdf_store, get_root_path_history_repository
 from app.main import app
 from app.repositories.pdf.pdf_store import PdfStore
+from app.repositories.settings.root_path_history_repository import (
+    RootPathHistoryRepository,
+)
 
 
 @pytest.fixture()
-def client():
+def client(tmp_path: Path):
     test_pdf_store = PdfStore()
+    test_root_path_history_repository = RootPathHistoryRepository(
+        history_path=tmp_path / "root_path_history.json"
+    )
     app.dependency_overrides[get_pdf_store] = lambda: test_pdf_store
+    app.dependency_overrides[get_root_path_history_repository] = (
+        lambda: test_root_path_history_repository
+    )
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
@@ -140,6 +151,27 @@ class TestScanPdfs:
         )
 
         assert response.status_code == 422
+
+    def test_scan_success_records_the_normalized_root_path_in_history(
+        self, client: TestClient
+    ) -> None:
+        pdf_bytes = _build_fixture_pdf_with_toc()
+        client.post(
+            "/pdfs", files={"file": ("book.pdf", pdf_bytes, "application/pdf")}
+        )
+
+        response = client.post(
+            "/scan",
+            # Trailing "::" gets normalized away by DeckPath.from_string --
+            # the history entry should reflect the canonical form, not the
+            # raw request value verbatim.
+            json={"source_files": ["book.pdf"], "root_path": "公認会計士試験::"},
+        )
+        assert response.status_code == 200
+
+        history_response = client.get("/root-path-history")
+        paths = [entry["path"] for entry in history_response.json()["entries"]]
+        assert paths == ["公認会計士試験"]
 
     def test_scan_unknown_source_file_returns_404(self, client: TestClient) -> None:
         response = client.post(

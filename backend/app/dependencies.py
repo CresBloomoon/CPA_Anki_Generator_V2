@@ -10,6 +10,9 @@ from app.repositories.ai.factory import (
 )
 from app.repositories.jobs.job_store import JobStore
 from app.repositories.pdf.pdf_store import PdfStore
+from app.repositories.settings.root_path_history_repository import (
+    RootPathHistoryRepository,
+)
 from app.repositories.settings.settings_repository import (
     AiProviderSettings,
     SettingsRepository,
@@ -32,6 +35,10 @@ def get_job_store() -> JobStore:
 
 def get_settings_repository() -> SettingsRepository:
     return SettingsRepository()
+
+
+def get_root_path_history_repository() -> RootPathHistoryRepository:
+    return RootPathHistoryRepository()
 
 
 def _build_ai_repository(settings: AiProviderSettings) -> AiCardGeneratorRepository:

@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from app.routes.generation_routes import router as generation_router
 from app.routes.pdf_routes import router as pdf_router
+from app.routes.root_path_history_routes import router as root_path_history_router
 from app.routes.settings_routes import router as settings_router
 
 # Without this, app.* loggers' INFO/WARNING calls are silently dropped --
@@ -21,6 +22,7 @@ app = FastAPI(title="CPA Anki Generator API")
 app.include_router(pdf_router)
 app.include_router(generation_router)
 app.include_router(settings_router)
+app.include_router(root_path_history_router)
 
 
 @app.get("/health")

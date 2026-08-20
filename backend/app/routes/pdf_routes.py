@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 
-from app.dependencies import get_pdf_store
+from app.dependencies import get_pdf_store, get_root_path_history_repository
+from app.domain.section import DeckPath
 from app.repositories.pdf.dto import PdfParsingError
 from app.repositories.pdf.pdf_store import PdfNotFoundError, PdfStore
 from app.repositories.pdf.pdf_structure_repository import PdfStructureRepository
+from app.repositories.settings.root_path_history_repository import (
+    RootPathHistoryRepository,
+)
 from app.routes.page_range_display import to_display_end_page
 from app.routes.schemas.pdf import (
     ScanRequest,
@@ -36,7 +40,11 @@ async def upload_pdf(
 
 @router.post("/scan", response_model=ScanResponse)
 def scan_pdfs(
-    request: ScanRequest, pdf_store: PdfStore = Depends(get_pdf_store)
+    request: ScanRequest,
+    pdf_store: PdfStore = Depends(get_pdf_store),
+    root_path_history_repository: RootPathHistoryRepository = Depends(
+        get_root_path_history_repository
+    ),
 ) -> ScanResponse:
     try:
         pdf_files = [
@@ -57,6 +65,13 @@ def scan_pdfs(
         # e.g. DeckPath.from_string(root_path) rejecting a root_path that's
         # empty (or entirely whitespace/"::") even after normalization.
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    # Recorded as the normalized/canonical form (not request.root_path
+    # verbatim) so history entries never carry the trailing/doubled "::"
+    # or stray whitespace that from_string() already strips elsewhere.
+    root_path_history_repository.add_or_update(
+        DeckPath.from_string(request.root_path).joined()
+    )
 
     return ScanResponse(
         sections=[
