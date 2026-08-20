@@ -23,6 +23,7 @@ export default defineConfig({
       "/scan": "http://backend:8000",
       "/generation-jobs": "http://backend:8000",
       "/settings": "http://backend:8000",
+      "/root-path-history": "http://backend:8000",
     },
   },
 })

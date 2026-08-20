@@ -1,8 +1,10 @@
-import { useRef, useState } from 'react'
-import { scanPdfs, uploadPdf } from '../api/client'
+import { useEffect, useRef, useState } from 'react'
+import { getRootPathHistory, scanPdfs, uploadPdf } from '../api/client'
 import type { ScanResponse } from '../api/types'
 import { iconButtonClasses, primaryButtonClasses, textInputClasses } from '../styles'
 import { TrashIcon } from './icons'
+
+const ROOT_PATH_HISTORY_DATALIST_ID = 'upload-panel-root-path-history-options'
 
 interface UploadPanelProps {
   onFilesUploaded: (sourceFiles: string[]) => void
@@ -15,11 +17,25 @@ export function UploadPanel({
 }: UploadPanelProps) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [rootPath, setRootPath] = useState('公認会計士試験::')
+  const [rootPathHistory, setRootPathHistory] = useState<string[]>([])
   const [isScanning, setIsScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dropWarning, setDropWarning] = useState<string | null>(null)
   const [isDraggingOver, setIsDraggingOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Fetched once on mount only -- this is a convenience suggestion list, not
+  // a source of truth the UI depends on, so a failure here is swallowed
+  // silently rather than surfaced as an error (it must never block scanning).
+  useEffect(() => {
+    getRootPathHistory()
+      .then((response) =>
+        setRootPathHistory(response.entries.map((entry) => entry.path)),
+      )
+      .catch(() => {
+        // Non-critical: the root path input still works without suggestions.
+      })
+  }, [])
 
   const canScan = selectedFiles.length > 0 && rootPath.trim() !== '' && !isScanning
 
@@ -180,8 +196,14 @@ export function UploadPanel({
           value={rootPath}
           onChange={(event) => setRootPath(event.target.value)}
           placeholder="公認会計士試験::財務会計論::理論"
+          list={ROOT_PATH_HISTORY_DATALIST_ID}
           className={`mt-1 block w-full ${textInputClasses}`}
         />
+        <datalist id={ROOT_PATH_HISTORY_DATALIST_ID}>
+          {rootPathHistory.map((path) => (
+            <option key={path} value={path} />
+          ))}
+        </datalist>
       </div>
 
       <button

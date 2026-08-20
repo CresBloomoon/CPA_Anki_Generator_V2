@@ -1,5 +1,6 @@
 import type {
   GenerationJobStatusResponse,
+  RootPathHistoryResponse,
   ScanResponse,
   SectionInput,
   StartGenerationJobResponse,
@@ -55,6 +56,16 @@ export async function scanPdfs(
   }
 
   return response.json() as Promise<ScanResponse>
+}
+
+export async function getRootPathHistory(): Promise<RootPathHistoryResponse> {
+  const response = await fetch('/root-path-history')
+
+  if (!response.ok) {
+    throw new Error(await extractErrorMessage(response))
+  }
+
+  return response.json() as Promise<RootPathHistoryResponse>
 }
 
 export async function startGenerationJob(

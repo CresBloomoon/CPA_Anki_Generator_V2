@@ -19,6 +19,17 @@ export interface ScanResponse {
   warnings: string[]
 }
 
+// Mirrors backend/app/routes/schemas/root_path_history.py.
+
+export interface RootPathHistoryEntry {
+  path: string
+  last_used_at: string
+}
+
+export interface RootPathHistoryResponse {
+  entries: RootPathHistoryEntry[]
+}
+
 // Mirrors backend/app/routes/schemas/generation.py.
 
 export interface SectionInput {
