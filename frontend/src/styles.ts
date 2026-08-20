@@ -17,6 +17,13 @@ export const iconButtonClasses = 'rounded p-1.5'
 export const textInputClasses =
   'rounded border border-gray-300 px-3 py-2 text-sm'
 
-export const tableFieldClasses = 'rounded border border-gray-300 px-2 py-1.5'
+// Border color deliberately left out of tableFieldClasses (Phase5-8):
+// SectionTable needs to switch between a default and an error border, and
+// always applying exactly one of fieldBorderDefaultClasses /
+// fieldBorderErrorClasses (never both at once) avoids relying on
+// Tailwind's utility-generation order to decide which color class wins.
+export const tableFieldClasses = 'rounded border px-2 py-1.5'
+export const fieldBorderDefaultClasses = 'border-gray-300'
+export const fieldBorderErrorClasses = 'border-red-500'
 
 export const checkboxClasses = 'h-5 w-5'

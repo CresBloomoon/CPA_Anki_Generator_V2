@@ -35,7 +35,11 @@ const STATUS_BADGE_CLASSES: Record<SectionJobStatus, string> = {
 function toSectionInput(row: SectionRow): SectionInput {
   return {
     title: row.title,
-    start_page: row.start_page,
+    // '' ("cleared, mid-edit" -- see SectionTable's start_page state)
+    // becomes 0 here, which Pydantic's Field(ge=1) rejects with a 422.
+    // Consistent with Phase5-8's design: this module never blocks
+    // submission itself, the server-side check remains the actual gate.
+    start_page: row.start_page === '' ? 0 : row.start_page,
     end_page: row.end_page,
     deck_path: row.deck_path,
     source_file: row.source_file,
