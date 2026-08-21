@@ -49,6 +49,14 @@ interface SectionTableProps {
 
 const DECK_PATH_DATALIST_ID = 'section-table-deck-path-options'
 
+// Each row repeats the same six fields, so every <input>/<select> needs an
+// id derived from something stable per-row -- row.id (from createId(),
+// already used as the React key) fits, rather than the array index (which
+// would get reassigned to a different row after a delete).
+function fieldId(rowId: string, field: string): string {
+  return `section-${rowId}-${field}`
+}
+
 // Only the columns holding actual data are resizable -- the checkbox and
 // delete-button columns are fixed-size icon columns with nothing to
 // resize. Kept as a single Record (rather than five separate useState
@@ -257,7 +265,14 @@ export function SectionTable({
               return (
                 <tr key={row.id} className="border-b border-gray-100">
                   <td className="p-2">
+                    <label
+                      className="sr-only"
+                      htmlFor={fieldId(row.id, 'selected')}
+                    >
+                      この行を選択
+                    </label>
                     <input
+                      id={fieldId(row.id, 'selected')}
                       type="checkbox"
                       checked={row.selected}
                       onChange={(event) =>
@@ -268,7 +283,14 @@ export function SectionTable({
                   </td>
                   <td className="p-2">
                     <div className="group relative w-full">
+                      <label
+                        className="sr-only"
+                        htmlFor={fieldId(row.id, 'title')}
+                      >
+                        節タイトル
+                      </label>
                       <input
+                        id={fieldId(row.id, 'title')}
                         type="text"
                         value={row.title}
                         onChange={(event) =>
@@ -290,7 +312,14 @@ export function SectionTable({
                   </td>
                   <td className="p-2">
                     <div className="group relative w-full">
+                      <label
+                        className="sr-only"
+                        htmlFor={fieldId(row.id, 'start_page')}
+                      >
+                        開始ページ
+                      </label>
                       <input
+                        id={fieldId(row.id, 'start_page')}
                         type="number"
                         min={1}
                         value={row.start_page}
@@ -318,7 +347,14 @@ export function SectionTable({
                   </td>
                   <td className="p-2">
                     <div className="group relative w-full">
+                      <label
+                        className="sr-only"
+                        htmlFor={fieldId(row.id, 'end_page')}
+                      >
+                        終了ページ
+                      </label>
                       <input
+                        id={fieldId(row.id, 'end_page')}
                         type="number"
                         min={1}
                         value={row.end_page ?? ''}
@@ -347,7 +383,14 @@ export function SectionTable({
                   </td>
                   <td className="p-2">
                     <div className="group relative w-full">
+                      <label
+                        className="sr-only"
+                        htmlFor={fieldId(row.id, 'deck_path')}
+                      >
+                        出力デッキ名
+                      </label>
                       <input
+                        id={fieldId(row.id, 'deck_path')}
                         type="text"
                         list={DECK_PATH_DATALIST_ID}
                         value={row.deck_path}
@@ -369,7 +412,14 @@ export function SectionTable({
                     </div>
                   </td>
                   <td className="p-2">
+                    <label
+                      className="sr-only"
+                      htmlFor={fieldId(row.id, 'source_file')}
+                    >
+                      ソースファイル
+                    </label>
                     <select
+                      id={fieldId(row.id, 'source_file')}
                       value={row.source_file}
                       onChange={(event) =>
                         updateRow(row.id, { source_file: event.target.value })

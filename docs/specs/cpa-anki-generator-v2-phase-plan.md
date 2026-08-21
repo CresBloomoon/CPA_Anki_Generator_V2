@@ -452,6 +452,24 @@ Phase番号はスライドさせず末尾に追加した。
 - Done when：対象の全ボタン・入力欄・チェックボックスが一回り大きく表示され、
 文字サイズ自体は変わっていないことを確認する
 
+### Phase5-16: フォーム要素のアクセシビリティ対応（id/name＋sr-onlyラベル）
+- 経緯：Phase6-1の実機確認中に、Chrome DevTools Issuesで「A form field element should
+have an id or name attribute」（46件）「No label associated with a form field」（2件）が
+見つかった。CORS配線とは無関係な、フロントエンドのフォーム要素側の問題であり、内容的には
+Step5（フロントエンド）に属するため、Phase番号はスライドさせず末尾に追加した。
+- 実装物：
+  - `SectionTable.tsx`：`fieldId(rowId, field)`ヘルパーを新設し、`row.id`（`createId()`由来、
+    既存のReact keyと同じ発生源）を使って各行のid（選択チェックボックス／節タイトル／
+    開始ページ／終了ページ／出力デッキ名／ソースファイル、計6要素）に一意なidを付与した。
+    列見出し（`<th>`）が既に視覚的に存在するため、各セルには視覚的には非表示（`sr-only`）の
+    `<label htmlFor>`を対応する`id`に紐付けた（列見出しと同じ文言を視覚的に二重表示は
+    しない）。
+  - `UploadPanel.tsx`：隠しファイル`<input type="file">`とルートパス`<input type="text">`に
+    idを付与し、既存の（`htmlFor`未指定だった）`<label>`をそれぞれ紐付けた。新規のラベル
+    増設はしていない。
+- 依存：Phase5-2, Phase5-8, Phase5-14（対象のフォーム要素が出揃った状態が前提）
+- Done when：Chrome DevTools Issuesで対象の46件＋2件の警告が解消される
+
 ---
 ## Step 6: 結合＆実PDF検証
 

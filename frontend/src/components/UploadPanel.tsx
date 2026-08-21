@@ -5,6 +5,8 @@ import { iconButtonClasses, primaryButtonClasses, textInputClasses } from '../st
 import { TrashIcon } from './icons'
 
 const ROOT_PATH_HISTORY_DATALIST_ID = 'upload-panel-root-path-history-options'
+const FILE_INPUT_ID = 'upload-panel-file-input'
+const ROOT_PATH_INPUT_ID = 'upload-panel-root-path-input'
 
 interface UploadPanelProps {
   onFilesUploaded: (sourceFiles: string[]) => void
@@ -126,7 +128,10 @@ export function UploadPanel({
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-gray-200 p-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700">
+        <label
+          htmlFor={FILE_INPUT_ID}
+          className="block text-sm font-medium text-gray-700"
+        >
           PDFファイル（複数選択可）
         </label>
         {/*
@@ -151,6 +156,7 @@ export function UploadPanel({
             ここにPDFをドロップ、またはクリックして選択
           </p>
           <input
+            id={FILE_INPUT_ID}
             ref={fileInputRef}
             type="file"
             accept="application/pdf"
@@ -188,10 +194,14 @@ export function UploadPanel({
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700">
+        <label
+          htmlFor={ROOT_PATH_INPUT_ID}
+          className="block text-sm font-medium text-gray-700"
+        >
           ルートパス（例: 公認会計士試験::財務会計論::理論）
         </label>
         <input
+          id={ROOT_PATH_INPUT_ID}
           type="text"
           value={rootPath}
           onChange={(event) => setRootPath(event.target.value)}
