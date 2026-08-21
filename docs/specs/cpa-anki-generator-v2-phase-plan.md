@@ -455,8 +455,16 @@ Phase番号はスライドさせず末尾に追加した。
 ---
 ## Step 6: 結合＆実PDF検証
 
-### Phase6-1: Docker Compose全体起動＋CORS配線
-- 実装物：backend側CORSMiddleware設定、compose上でのポート・ネットワーク疎通確認
+### Phase6-1: Docker Compose全体起動確認
+- 実装物：compose上でのポート・ネットワーク疎通確認のみ（`docker compose up`のみで両コンテナが
+  立ち上がり、フロントエンドからバックエンドAPIに疎通することを実機で確認する）
+- スコープ変更（当初計画からの差分）：当初はbackend側`CORSMiddleware`設定も本Phaseの実装物と
+  していたが、現状調査の結果、追加不要と判断した。理由・経緯は
+  `docs/dev-logs/phase6-1-docker-compose-and-cors.md`を参照。要約すると、frontendコンテナは
+  Vite開発サーバーを常時稼働させる構成であり、`vite.config.ts`の`server.proxy`がブラウザから
+  見て同一オリジンのままバックエンドへ転送するため、CORSの制約自体が発生しない。本アプリは
+  単一ユーザーのTailnet運用が前提で、`vite build`＋nginx配信のような別オリジン構成へ移行する
+  予定もないため、CORSMiddlewareの実装は見送ることとした
 - 依存：Step0〜5すべて
 - Done when：docker compose upのみでフロントエンドからバックエンドAPIに疎通する
 
