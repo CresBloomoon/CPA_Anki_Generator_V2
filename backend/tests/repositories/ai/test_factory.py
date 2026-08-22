@@ -57,8 +57,45 @@ class TestAiCardGeneratorFactory:
             factory.create(settings)
 
     def test_unsupported_provider_raises(self) -> None:
+        # "chatgpt" (the consumer product name) is deliberately not the
+        # internal provider identifier -- only "openai" is recognized (see
+        # factory.py's _PROVIDER_API_KEY_ENV_VARS / OPENAI_API_KEY).
         factory = AiCardGeneratorFactory()
         settings = AiProviderSettings(provider="chatgpt", model_name="gpt-5")
 
         with pytest.raises(UnsupportedProviderError):
+            factory.create(settings)
+
+    def test_create_dispatches_claude_settings_to_claude_repository(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        captured: dict[str, object] = {}
+
+        class _FakeClaudeRepository:
+            def __init__(self, model_name: str, api_key: str) -> None:
+                captured["model_name"] = model_name
+                captured["api_key"] = api_key
+
+        monkeypatch.setattr(
+            "app.repositories.ai.factory.ClaudeRepository", _FakeClaudeRepository
+        )
+        monkeypatch.setenv("CLAUDE_API_KEY", "test-key-456")
+
+        factory = AiCardGeneratorFactory()
+        settings = AiProviderSettings(provider="claude", model_name="claude-opus-5")
+
+        repository = factory.create(settings)
+
+        assert isinstance(repository, _FakeClaudeRepository)
+        assert captured == {"model_name": "claude-opus-5", "api_key": "test-key-456"}
+
+    def test_missing_claude_api_key_env_var_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("CLAUDE_API_KEY", raising=False)
+
+        factory = AiCardGeneratorFactory()
+        settings = AiProviderSettings(provider="claude", model_name="claude-opus-5")
+
+        with pytest.raises(MissingApiKeyError):
             factory.create(settings)

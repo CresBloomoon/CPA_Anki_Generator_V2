@@ -6,8 +6,9 @@ import time
 from google import genai
 from google.genai import types as genai_types
 
-from app.domain.card import CardContent, CardContentItem
+from app.domain.card import CardContent
 from app.repositories.ai.base import AiCardGeneratorRepository
+from app.repositories.ai.card_content_mapper import to_card_content_item
 from app.repositories.ai.dto import PromptContext
 from app.repositories.ai.json_repair import extract_cards_from_json
 from app.repositories.ai.prompt_builder import PromptBuilder
@@ -47,25 +48,6 @@ def _is_rate_limit_error(exc: Exception) -> bool:
 def _is_auth_error(exc: Exception) -> bool:
     message = str(exc)
     return any(marker in message for marker in _AUTH_ERROR_MARKERS)
-
-
-def _to_card_content_item(raw_card: dict) -> CardContentItem:
-    tags = raw_card.get("TAGS", [])
-    if isinstance(tags, str):
-        tags = [tag.strip() for tag in tags.split(",") if tag.strip()]
-
-    return CardContentItem(
-        title=raw_card.get("TITLE", ""),
-        question=raw_card.get("QUESTION", ""),
-        ronsho_body=raw_card.get("RONSHO_BODY", ""),
-        kaisetsu_body=raw_card.get("KAISETSU_BODY", ""),
-        yo_suruni_body=raw_card.get("YO_SURUNI_BODY", ""),
-        ryui_body=raw_card.get("RYUI_BODY", ""),
-        rank_tanto=raw_card.get("RANK_TANTO", ""),
-        rank_ronbun=raw_card.get("RANK_RONBUN", ""),
-        page_code=raw_card.get("PAGE_CODE", ""),
-        tags=tuple(tags),
-    )
 
 
 class GeminiRepository(AiCardGeneratorRepository):
@@ -115,7 +97,7 @@ class GeminiRepository(AiCardGeneratorRepository):
                 )
                 raw_cards = extract_cards_from_json(response.text)
                 return CardContent(
-                    items=tuple(_to_card_content_item(card) for card in raw_cards)
+                    items=tuple(to_card_content_item(card) for card in raw_cards)
                 )
             except Exception as exc:  # noqa: BLE001 - classified below
                 call_elapsed = time.monotonic() - call_started_at

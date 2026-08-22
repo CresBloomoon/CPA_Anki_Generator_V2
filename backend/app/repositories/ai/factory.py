@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 from app.repositories.ai.base import AiCardGeneratorRepository
+from app.repositories.ai.claude_repository import ClaudeRepository
 from app.repositories.ai.gemini_repository import GeminiRepository
 from app.repositories.settings.settings_repository import AiProviderSettings
 
@@ -11,6 +12,7 @@ from app.repositories.settings.settings_repository import AiProviderSettings
 # branch in create() below.
 _PROVIDER_API_KEY_ENV_VARS = {
     "gemini": "GEMINI_API_KEY",
+    "claude": "CLAUDE_API_KEY",
 }
 
 
@@ -27,6 +29,10 @@ class AiCardGeneratorFactory:
         if settings.provider == "gemini":
             api_key = self._require_api_key("gemini")
             return GeminiRepository(model_name=settings.model_name, api_key=api_key)
+
+        if settings.provider == "claude":
+            api_key = self._require_api_key("claude")
+            return ClaudeRepository(model_name=settings.model_name, api_key=api_key)
 
         raise UnsupportedProviderError(
             f"未対応のプロバイダーです: {settings.provider!r}"
