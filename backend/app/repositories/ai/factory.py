@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 from app.repositories.ai.base import AiCardGeneratorRepository
+from app.repositories.ai.chatgpt_repository import ChatGptRepository
 from app.repositories.ai.claude_repository import ClaudeRepository
 from app.repositories.ai.gemini_repository import GeminiRepository
 from app.repositories.settings.settings_repository import AiProviderSettings
@@ -13,6 +14,7 @@ from app.repositories.settings.settings_repository import AiProviderSettings
 _PROVIDER_API_KEY_ENV_VARS = {
     "gemini": "GEMINI_API_KEY",
     "claude": "CLAUDE_API_KEY",
+    "openai": "OPENAI_API_KEY",
 }
 
 
@@ -33,6 +35,10 @@ class AiCardGeneratorFactory:
         if settings.provider == "claude":
             api_key = self._require_api_key("claude")
             return ClaudeRepository(model_name=settings.model_name, api_key=api_key)
+
+        if settings.provider == "openai":
+            api_key = self._require_api_key("openai")
+            return ChatGptRepository(model_name=settings.model_name, api_key=api_key)
 
         raise UnsupportedProviderError(
             f"未対応のプロバイダーです: {settings.provider!r}"
