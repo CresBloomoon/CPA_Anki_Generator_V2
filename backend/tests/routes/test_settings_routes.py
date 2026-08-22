@@ -63,3 +63,24 @@ class TestUpdateSettings:
         )
 
         assert response.status_code == 422
+
+    def test_unknown_provider_returns_422(self, client: TestClient) -> None:
+        response = client.put(
+            "/settings",
+            json={"provider": "chatgpt", "model_name": "gpt-5.5"},
+        )
+
+        assert response.status_code == 422
+
+
+class TestGetAvailableModels:
+    def test_returns_all_three_providers_with_at_least_one_model_each(
+        self, client: TestClient
+    ) -> None:
+        response = client.get("/settings/available-models")
+
+        assert response.status_code == 200
+        models = response.json()["models"]
+        assert set(models) == {"gemini", "claude", "openai"}
+        for provider_models in models.values():
+            assert len(provider_models) > 0

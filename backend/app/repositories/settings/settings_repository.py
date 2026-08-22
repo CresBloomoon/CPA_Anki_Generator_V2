@@ -4,6 +4,8 @@ import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from app.repositories.settings.available_models import AVAILABLE_MODELS_BY_PROVIDER
+
 _DEFAULT_SETTINGS_PATH = Path(__file__).resolve().parents[3] / "settings.json"
 _DEFAULT_PROVIDER = "gemini"
 _DEFAULT_MODEL_NAME = "gemini-2.5-flash"
@@ -19,6 +21,12 @@ class AiProviderSettings:
             raise ValueError("provider must not be empty")
         if not self.model_name.strip():
             raise ValueError("model_name must not be empty")
+        if self.provider not in AVAILABLE_MODELS_BY_PROVIDER:
+            known_providers = sorted(AVAILABLE_MODELS_BY_PROVIDER)
+            raise ValueError(
+                f"未対応のプロバイダーです: {self.provider!r}"
+                f"（対応プロバイダー: {known_providers}）"
+            )
 
 
 class SettingsRepository:

@@ -18,6 +18,13 @@ class TestAiProviderSettings:
         with pytest.raises(ValueError):
             AiProviderSettings(provider="gemini", model_name="")
 
+    def test_unknown_provider_raises(self) -> None:
+        # "chatgpt" (the consumer product name) is deliberately not the
+        # internal provider identifier -- only "gemini"/"claude"/"openai"
+        # are recognized (see available_models.py).
+        with pytest.raises(ValueError):
+            AiProviderSettings(provider="chatgpt", model_name="gpt-5.5")
+
 
 class TestSettingsRepository:
     def test_load_returns_defaults_when_file_does_not_exist(
@@ -53,11 +60,11 @@ class TestSettingsRepository:
     ) -> None:
         settings_path = tmp_path / "settings.json"
         settings_path.write_text(
-            json.dumps({"provider": "chatgpt", "model_name": "gpt-5"}),
+            json.dumps({"provider": "openai", "model_name": "gpt-5.5"}),
             encoding="utf-8",
         )
         repository = SettingsRepository(settings_path=settings_path)
 
         settings = repository.load()
 
-        assert settings == AiProviderSettings(provider="chatgpt", model_name="gpt-5")
+        assert settings == AiProviderSettings(provider="openai", model_name="gpt-5.5")

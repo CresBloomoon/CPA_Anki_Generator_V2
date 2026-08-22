@@ -3,16 +3,23 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.dependencies import get_settings_repository
+from app.repositories.settings.available_models import AVAILABLE_MODELS_BY_PROVIDER
 from app.repositories.settings.settings_repository import (
     AiProviderSettings,
     SettingsRepository,
 )
 from app.routes.schemas.settings import (
     AiProviderSettingsResponse,
+    AvailableModelsResponse,
     UpdateAiProviderSettingsRequest,
 )
 
 router = APIRouter()
+
+
+@router.get("/settings/available-models", response_model=AvailableModelsResponse)
+def get_available_models() -> AvailableModelsResponse:
+    return AvailableModelsResponse(models=AVAILABLE_MODELS_BY_PROVIDER)
 
 
 @router.get("/settings", response_model=AiProviderSettingsResponse)

@@ -57,7 +57,15 @@ def _build_ai_repository(settings: AiProviderSettings) -> AiCardGeneratorReposit
 
 def get_ai_card_generator_repository() -> AiCardGeneratorRepository:
     # Settings are re-read from settings.json on every call (no caching),
-    # so a provider/model change made via the future settings API takes
-    # effect on the next generation job without a backend restart.
-    settings = SettingsRepository().load()
+    # so a provider/model change made via the settings API takes effect on
+    # the next generation job without a backend restart.
+    try:
+        settings = SettingsRepository().load()
+    except ValueError as exc:
+        # e.g. settings.json on disk still names a provider that
+        # AiProviderSettings no longer recognizes (Phase4-5 added that
+        # validation) -- server misconfiguration, not the caller's fault,
+        # so this becomes a 500 rather than an unhandled ValueError.
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
     return _build_ai_repository(settings)

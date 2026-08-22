@@ -11,3 +11,7 @@ class AiProviderSettingsResponse(BaseModel):
 class UpdateAiProviderSettingsRequest(BaseModel):
     provider: str
     model_name: str
+
+
+class AvailableModelsResponse(BaseModel):
+    models: dict[str, list[str]]

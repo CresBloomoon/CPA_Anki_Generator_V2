@@ -1,10 +1,6 @@
 import pytest
 
-from app.repositories.ai.factory import (
-    AiCardGeneratorFactory,
-    MissingApiKeyError,
-    UnsupportedProviderError,
-)
+from app.repositories.ai.factory import AiCardGeneratorFactory, MissingApiKeyError
 from app.repositories.ai.gemini_repository import GeminiRepository
 from app.repositories.settings.settings_repository import AiProviderSettings
 
@@ -54,16 +50,6 @@ class TestAiCardGeneratorFactory:
         settings = AiProviderSettings(provider="gemini", model_name="gemini-2.5-pro")
 
         with pytest.raises(MissingApiKeyError):
-            factory.create(settings)
-
-    def test_unsupported_provider_raises(self) -> None:
-        # "chatgpt" (the consumer product name) is deliberately not the
-        # internal provider identifier -- only "openai" is recognized (see
-        # factory.py's _PROVIDER_API_KEY_ENV_VARS / OPENAI_API_KEY).
-        factory = AiCardGeneratorFactory()
-        settings = AiProviderSettings(provider="chatgpt", model_name="gpt-5.5")
-
-        with pytest.raises(UnsupportedProviderError):
             factory.create(settings)
 
     def test_create_dispatches_claude_settings_to_claude_repository(
