@@ -407,8 +407,13 @@ table-layout: fixedで列幅を可変にする。列幅はcolumnWidths: Record<�
 しても同じ履歴が見える
 
 ### Phase5-12（旧Phase5-5、任意・小規模）: 設定UI（プロバイダー／モデルのみ）
-- 実装物：components/SettingsPanel.tsx（provider/model選択のみ。科目リストUIは無し）
-- 依存：Phase4-4
+- 実装物：`components/SettingsPanel.tsx`（新規）。プロバイダー選択→モデル選択の
+2段階`<select>`（案1）。プロバイダー切替時は、対応するモデル一覧の先頭モデルに自動で
+合わせる。マウント時に`GET /settings`（現在値）と`GET /settings/available-models`
+（Phase4-5で新設、プロバイダー→モデル一覧のハードコード定数）を取得し、他フォームと
+同じく明示的な「保存」ボタンで`PUT /settings`を送信する（変更を即時自動保存はしない）。
+科目リストUIは無し。
+- 依存：Phase4-4, Phase4-5, Phase2-8（Claude）, Phase2-9（ChatGPT）
 
 ### Phase5-13（旧Phase5-6、任意・後回し、Phase2-7に連動）: ルートパス欄への科目自動サジェスト
 - 実装物：Phase2-7が実装された場合に、スキャン結果から推定科目をルートパス欄にプリフィル表示

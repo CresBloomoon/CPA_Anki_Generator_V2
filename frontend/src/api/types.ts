@@ -30,6 +30,17 @@ export interface RootPathHistoryResponse {
   entries: RootPathHistoryEntry[]
 }
 
+// Mirrors backend/app/routes/schemas/settings.py.
+
+export interface AiProviderSettings {
+  provider: string
+  model_name: string
+}
+
+export interface AvailableModelsResponse {
+  models: Record<string, string[]>
+}
+
 // Mirrors backend/app/routes/schemas/generation.py.
 
 export interface SectionInput {

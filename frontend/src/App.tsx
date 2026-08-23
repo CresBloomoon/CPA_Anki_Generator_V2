@@ -3,13 +3,17 @@ import { UploadPanel } from './components/UploadPanel'
 import { SectionTable, type SectionRow } from './components/SectionTable'
 import { GenerationProgress } from './components/GenerationProgress'
 import { DownloadButton } from './components/DownloadButton'
+import { SettingsPanel } from './components/SettingsPanel'
+import { Modal } from './components/Modal'
+import { Toast } from './components/Toast'
+import { GearIcon } from './components/icons'
 import type {
   GenerationJobStatusResponse,
   ScanResponse,
   SectionScanResult,
 } from './api/types'
 import { createId } from './utils/id'
-import { secondaryButtonClasses } from './styles'
+import { iconButtonClasses, secondaryButtonClasses } from './styles'
 
 function toSectionRow(section: SectionScanResult): SectionRow {
   return {
@@ -54,6 +58,13 @@ function App() {
   // the same key, which React silently mishandled (duplicated DOM instead
   // of cleanly remounting) -- hence the "upload-"/"progress-" prefixes.
   const [resetKey, setResetKey] = useState(0)
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
+
+  function handleSettingsSaved() {
+    setIsSettingsModalOpen(false)
+    setToastMessage('保存しました')
+  }
 
   function handleFilesUploaded(sourceFiles: string[]) {
     setUploadedSourceFiles((prev) =>
@@ -83,7 +94,18 @@ function App() {
   return (
     <div className="min-h-screen bg-white p-8 text-gray-900">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">CPA Anki Generator V2</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-semibold">CPA Anki Generator V2</h1>
+          <button
+            type="button"
+            onClick={() => setIsSettingsModalOpen(true)}
+            aria-label="AIプロバイダー設定"
+            title="AIプロバイダー設定"
+            className={`text-gray-500 hover:text-gray-800 ${iconButtonClasses}`}
+          >
+            <GearIcon />
+          </button>
+        </div>
         <button
           type="button"
           onClick={handleReset}
@@ -98,6 +120,19 @@ function App() {
           リセット
         </button>
       </div>
+
+      {isSettingsModalOpen && (
+        <Modal
+          title="AIプロバイダー設定"
+          onClose={() => setIsSettingsModalOpen(false)}
+        >
+          <SettingsPanel onSaved={handleSettingsSaved} />
+        </Modal>
+      )}
+
+      {toastMessage && (
+        <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
+      )}
 
       <UploadPanel
         key={`upload-${resetKey}`}

@@ -1,4 +1,6 @@
 import type {
+  AiProviderSettings,
+  AvailableModelsResponse,
   GenerationJobStatusResponse,
   RootPathHistoryResponse,
   ScanResponse,
@@ -66,6 +68,43 @@ export async function getRootPathHistory(): Promise<RootPathHistoryResponse> {
   }
 
   return response.json() as Promise<RootPathHistoryResponse>
+}
+
+export async function getSettings(): Promise<AiProviderSettings> {
+  const response = await fetch('/settings')
+
+  if (!response.ok) {
+    throw new Error(await extractErrorMessage(response))
+  }
+
+  return response.json() as Promise<AiProviderSettings>
+}
+
+export async function getAvailableModels(): Promise<AvailableModelsResponse> {
+  const response = await fetch('/settings/available-models')
+
+  if (!response.ok) {
+    throw new Error(await extractErrorMessage(response))
+  }
+
+  return response.json() as Promise<AvailableModelsResponse>
+}
+
+export async function updateSettings(
+  provider: string,
+  modelName: string,
+): Promise<AiProviderSettings> {
+  const response = await fetch('/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider, model_name: modelName }),
+  })
+
+  if (!response.ok) {
+    throw new Error(await extractErrorMessage(response))
+  }
+
+  return response.json() as Promise<AiProviderSettings>
 }
 
 export async function startGenerationJob(
