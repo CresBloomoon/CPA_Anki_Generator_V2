@@ -47,7 +47,14 @@ class StartGenerationJobUsecase:
             try:
                 pdf_bytes = self._pdf_store.get(section_job.section.source_file)
                 cards = self._generate_cards_for_section_usecase.execute(
-                    section_job.section, pdf_bytes, job.additional_prompt
+                    section_job.section,
+                    pdf_bytes,
+                    job.additional_prompt,
+                    # Persist each block's cards onto the SectionJob as soon
+                    # as they're generated, so a later block's failure
+                    # (caught below) still leaves earlier blocks' cards in
+                    # place -- see Phase4-8's dev-log.
+                    on_block_generated=section_job.cards.extend,
                 )
                 job.mark_done(index, cards)
             except Exception as exc:  # noqa: BLE001 - any failure aborts the batch

@@ -90,6 +90,31 @@ class TestBuildAnkiPackageUsecase:
         assert result.is_complete is False
         assert repository.calls == [done_cards]
 
+    def test_partially_done_sections_cards_are_included(self) -> None:
+        section1 = _make_section("01節 A")
+        section2 = _make_section("02節 B")
+        job = GenerationJob(
+            job_id="job-1",
+            section_jobs=[SectionJob(section=section1), SectionJob(section=section2)],
+        )
+        job.mark_running(0)
+        done_cards = [_make_card("card-1", section1)]
+        job.mark_done(0, done_cards)
+
+        job.mark_running(1)
+        partial_cards = [_make_card("card-2", section2)]
+        job.section_jobs[1].cards.extend(partial_cards)
+        job.mark_failed(1, "boom")
+
+        repository = _FakeAnkiPackageRepository()
+        usecase = BuildAnkiPackageUsecase(repository)
+
+        result = usecase.execute(job)
+
+        assert job.section_jobs[1].status.name == "PARTIALLY_DONE"
+        assert result.is_complete is False
+        assert repository.calls == [done_cards + partial_cards]
+
     def test_no_sections_done_yet_still_produces_a_result(self) -> None:
         section1 = _make_section("01節 A")
         job = GenerationJob(job_id="job-1", section_jobs=[SectionJob(section=section1)])

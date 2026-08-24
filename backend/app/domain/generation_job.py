@@ -11,6 +11,13 @@ class SectionJobStatus(Enum):
     PENDING = auto()
     RUNNING = auto()
     DONE = auto()
+    # Reached only via mark_failed() when the section already has some
+    # cards recorded (block-level progress was persisted -- see
+    # GenerateCardsForSectionUsecase's on_block_generated callback) at the
+    # moment a later block fails. Distinct from FAILED (zero cards) so
+    # partial results are neither silently discarded nor conflated with a
+    # section that produced nothing at all.
+    PARTIALLY_DONE = auto()
     FAILED = auto()
 
 
@@ -44,8 +51,17 @@ class GenerationJob:
         section_job.cards = list(cards)
 
     def mark_failed(self, index: int, error_message: str) -> None:
+        # Block-level progress (see GenerateCardsForSectionUsecase's
+        # on_block_generated callback) may have already appended cards to
+        # this section_job before the failure occurred. If so, the section
+        # produced *some* usable output and is PARTIALLY_DONE rather than a
+        # total FAILED -- the cards must not be silently dropped.
         section_job = self._require_status(index, SectionJobStatus.RUNNING, "fail")
-        section_job.status = SectionJobStatus.FAILED
+        section_job.status = (
+            SectionJobStatus.PARTIALLY_DONE
+            if section_job.cards
+            else SectionJobStatus.FAILED
+        )
         section_job.error_message = error_message
 
     def is_complete(self) -> bool:
@@ -57,7 +73,10 @@ class GenerationJob:
     def collect_generated_cards(self) -> list[Card]:
         cards: list[Card] = []
         for section_job in self.section_jobs:
-            if section_job.status == SectionJobStatus.DONE:
+            if section_job.status in (
+                SectionJobStatus.DONE,
+                SectionJobStatus.PARTIALLY_DONE,
+            ):
                 cards.extend(section_job.cards)
         return cards
 

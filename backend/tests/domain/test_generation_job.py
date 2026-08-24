@@ -99,6 +99,25 @@ class TestStateTransitions:
         with pytest.raises(ValueError):
             job.mark_failed(0, "エラー")
 
+    def test_mark_failed_with_cards_already_present_becomes_partially_done(
+        self,
+    ) -> None:
+        # Reproduces GenerateCardsForSectionUsecase's on_block_generated
+        # callback having already appended earlier blocks' cards onto this
+        # section_job (see StartGenerationJobUsecase) before a later block
+        # fails. The section produced *some* usable output, so it must not
+        # be conflated with a total failure.
+        job = _make_job(1)
+        job.mark_running(0)
+        partial_cards = [_make_card("01節 論点1")]
+        job.section_jobs[0].cards.extend(partial_cards)
+
+        job.mark_failed(0, "ブロック2/3でAI呼び出しが失敗しました")
+
+        assert job.section_jobs[0].status == SectionJobStatus.PARTIALLY_DONE
+        assert job.section_jobs[0].cards == partial_cards
+        assert job.section_jobs[0].error_message == "ブロック2/3でAI呼び出しが失敗しました"
+
 
 class TestIsComplete:
     def test_true_when_all_done(self) -> None:
@@ -120,6 +139,16 @@ class TestIsComplete:
         job.mark_failed(0, "エラー")
         job.mark_running(1)
         job.mark_done(1, [])
+        assert job.is_complete() is False
+
+    def test_false_when_some_partially_done(self) -> None:
+        job = _make_job(2)
+        job.mark_running(0)
+        job.section_jobs[0].cards.append(_make_card("01節 論点1"))
+        job.mark_failed(0, "エラー")
+        job.mark_running(1)
+        job.mark_done(1, [])
+        assert job.section_jobs[0].status == SectionJobStatus.PARTIALLY_DONE
         assert job.is_complete() is False
 
 
@@ -144,3 +173,18 @@ class TestCollectGeneratedCards:
 
         assert job.section_jobs[2].status == SectionJobStatus.PENDING
         assert job.collect_generated_cards() == done_cards
+
+    def test_partially_done_sections_cards_are_included(self) -> None:
+        job = _make_job(2)
+        done_cards = [_make_card("01節 論点1")]
+        partial_cards = [_make_card("02節 論点2")]
+
+        job.mark_running(0)
+        job.mark_done(0, done_cards)
+
+        job.mark_running(1)
+        job.section_jobs[1].cards.extend(partial_cards)
+        job.mark_failed(1, "AI呼び出しが失敗しました")
+
+        assert job.section_jobs[1].status == SectionJobStatus.PARTIALLY_DONE
+        assert job.collect_generated_cards() == done_cards + partial_cards

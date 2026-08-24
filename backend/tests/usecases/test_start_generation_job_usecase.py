@@ -39,11 +39,15 @@ class _FakeGenerateCardsForSectionUsecase:
         self.additional_prompts: list[str] = []
 
     def execute(
-        self, section: Section, pdf_bytes: bytes, additional_prompt: str = ""
+        self,
+        section: Section,
+        pdf_bytes: bytes,
+        additional_prompt: str = "",
+        on_block_generated=None,
     ) -> list[Card]:
         self.calls.append(section)
         self.additional_prompts.append(additional_prompt)
-        return self._behavior(section)
+        return self._behavior(section, on_block_generated)
 
 
 class TestRun:
@@ -56,7 +60,7 @@ class TestRun:
         section3 = _make_section("03節 C")
         done_cards = [_make_card("card-1", section1)]
 
-        def behavior(section: Section) -> list[Card]:
+        def behavior(section: Section, on_block_generated) -> list[Card]:
             if section is section1:
                 return done_cards
             if section is section2:
@@ -91,7 +95,7 @@ class TestRun:
         section1 = _make_section("01節 A")
         section2 = _make_section("02節 B")
 
-        def behavior(section: Section) -> list[Card]:
+        def behavior(section: Section, on_block_generated) -> list[Card]:
             return [_make_card(f"card-{section.title}", section)]
 
         job_store = JobStore()
@@ -114,7 +118,7 @@ class TestRun:
         section1 = _make_section("01節 A")
         section2 = _make_section("02節 B")
 
-        def behavior(section: Section) -> list[Card]:
+        def behavior(section: Section, on_block_generated) -> list[Card]:
             return [_make_card(f"card-{section.title}", section)]
 
         job_store = JobStore()
@@ -133,6 +137,37 @@ class TestRun:
 
         assert fake_generate.additional_prompts == ["具体例を厚めに", "具体例を厚めに"]
 
+    def test_on_block_generated_persists_partial_cards_onto_the_failing_section(
+        self,
+    ) -> None:
+        # Reproduces the incident this feature exists to prevent: a section
+        # spanning multiple blocks succeeds on block 1 (cards generated,
+        # API already billed) then fails on block 2. Without wiring
+        # on_block_generated to section_job.cards, block 1's cards would be
+        # silently discarded when the section ends up FAILED.
+        section1 = _make_section("01節 A")
+        partial_cards = [_make_card("block-1-card", section1)]
+
+        def behavior(section: Section, on_block_generated) -> list[Card]:
+            on_block_generated(partial_cards)
+            raise RuntimeError("ブロック2/2でAI呼び出しが失敗しました")
+
+        job_store = JobStore()
+        pdf_store = PdfStore()
+        pdf_store.save("book.pdf", b"pdf-bytes")
+        fake_generate = _FakeGenerateCardsForSectionUsecase(behavior)
+        usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
+
+        job = GenerationJob(
+            job_id="job-1", section_jobs=[SectionJob(section=section1)]
+        )
+
+        usecase.run(job)
+
+        assert job.section_jobs[0].status == SectionJobStatus.PARTIALLY_DONE
+        assert job.section_jobs[0].cards == partial_cards
+        assert job.collect_generated_cards() == partial_cards
+
 
 class TestExecute:
     def test_returns_a_job_id_and_registers_the_job_immediately(self) -> None:
@@ -141,7 +176,7 @@ class TestExecute:
         pdf_store = PdfStore()
         pdf_store.save("book.pdf", b"pdf-bytes")
         fake_generate = _FakeGenerateCardsForSectionUsecase(
-            lambda section: [_make_card("card-1", section)]
+            lambda section, on_block_generated: [_make_card("card-1", section)]
         )
         usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
 
@@ -167,7 +202,7 @@ class TestExecute:
         pdf_store = PdfStore()
         pdf_store.save("book.pdf", b"pdf-bytes")
         fake_generate = _FakeGenerateCardsForSectionUsecase(
-            lambda section: [_make_card("card-1", section)]
+            lambda section, on_block_generated: [_make_card("card-1", section)]
         )
         usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
 
@@ -181,7 +216,7 @@ class TestExecute:
         pdf_store = PdfStore()
         pdf_store.save("book.pdf", b"pdf-bytes")
         fake_generate = _FakeGenerateCardsForSectionUsecase(
-            lambda section: [_make_card("card-1", section)]
+            lambda section, on_block_generated: [_make_card("card-1", section)]
         )
         usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
 

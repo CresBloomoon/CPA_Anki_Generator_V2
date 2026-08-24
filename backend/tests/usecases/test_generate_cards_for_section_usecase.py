@@ -166,3 +166,65 @@ class TestGenerateCardsForSectionUsecase:
         cards = usecase.execute(section, pdf_bytes=b"...")
 
         assert len(cards) == 1
+
+
+class TestOnBlockGeneratedCallback:
+    def test_called_once_per_block_with_only_that_blocks_cards(self) -> None:
+        pdf_repo = _FakePdfStructureRepository(_build_marked_text(6))
+        ai_repo = _FakeAiRepository()
+        usecase = GenerateCardsForSectionUsecase(pdf_repo, ai_repo)
+        reported_blocks: list[list] = []
+
+        cards = usecase.execute(
+            _make_section(),
+            pdf_bytes=b"...",
+            on_block_generated=reported_blocks.append,
+        )
+
+        # 6 pages -> split into 2 blocks (see
+        # test_splits_into_four_page_blocks_when_more_than_five_pages).
+        assert len(reported_blocks) == 2
+        assert len(reported_blocks[0]) == 1
+        assert len(reported_blocks[1]) == 1
+        assert reported_blocks[0] + reported_blocks[1] == cards
+
+    def test_earlier_blocks_are_reported_before_a_later_block_fails(self) -> None:
+        # Reproduces the incident this callback exists to prevent: block 2
+        # of 2 fails after block 1 already succeeded. The callback must
+        # still have been called for block 1's cards before the exception
+        # propagates, so the caller can keep them.
+        pdf_repo = _FakePdfStructureRepository(_build_marked_text(6))
+        ai_repo = _FakeAiRepository()
+
+        call_count = 0
+        original_generate_cards = ai_repo.generate_cards
+
+        def flaky_generate_cards(section_text, prompt_context):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                raise RuntimeError("2ブロック目で失敗")
+            return original_generate_cards(section_text, prompt_context)
+
+        ai_repo.generate_cards = flaky_generate_cards
+        usecase = GenerateCardsForSectionUsecase(pdf_repo, ai_repo)
+        reported_blocks: list[list] = []
+
+        with pytest.raises(RuntimeError, match="2ブロック目で失敗"):
+            usecase.execute(
+                _make_section(),
+                pdf_bytes=b"...",
+                on_block_generated=reported_blocks.append,
+            )
+
+        assert len(reported_blocks) == 1
+        assert len(reported_blocks[0]) == 1
+
+    def test_defaults_to_none_and_does_not_require_a_callback(self) -> None:
+        pdf_repo = _FakePdfStructureRepository(_build_marked_text(1))
+        ai_repo = _FakeAiRepository()
+        usecase = GenerateCardsForSectionUsecase(pdf_repo, ai_repo)
+
+        cards = usecase.execute(_make_section(), pdf_bytes=b"...")
+
+        assert len(cards) == 1
