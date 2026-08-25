@@ -13,7 +13,11 @@ import type {
   SectionScanResult,
 } from './api/types'
 import { createId } from './utils/id'
-import { iconButtonClasses, secondaryButtonClasses } from './styles'
+import {
+  iconButtonClasses,
+  primaryButtonClasses,
+  secondaryButtonClasses,
+} from './styles'
 
 function toSectionRow(section: SectionScanResult): SectionRow {
   return {
@@ -63,6 +67,21 @@ function App() {
   const [resetKey, setResetKey] = useState(0)
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  // Whether the current job's results have been downloaded at least once.
+  // Reset to false on every performReset() -- see C-2's dev-log for why no
+  // finer-grained "downloaded vs. newly completed since" tracking is done.
+  const [hasDownloaded, setHasDownloaded] = useState(false)
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false)
+
+  // Counts sections whose cards are actually downloadable (DONE or
+  // PARTIALLY_DONE -- must match DownloadButton's own doneCount, otherwise
+  // a job whose only section is PARTIALLY_DONE would show a download
+  // button but skip the confirm-before-reset warning below).
+  const doneCount =
+    generationStatus?.section_jobs.filter(
+      (sectionJob) =>
+        sectionJob.status === 'DONE' || sectionJob.status === 'PARTIALLY_DONE',
+    ).length ?? 0
 
   function handleSettingsSaved() {
     setIsSettingsModalOpen(false)
@@ -75,13 +94,29 @@ function App() {
     )
   }
 
-  function handleReset() {
+  function performReset() {
     setRows([])
     setWarnings([])
     setUploadedSourceFiles([])
     setHasScanned(false)
     setGenerationStatus(null)
+    setHasDownloaded(false)
     setResetKey((prev) => prev + 1)
+  }
+
+  function handleResetClick() {
+    // Undownloaded completed cards would be discarded silently otherwise --
+    // ask for confirmation first (see C-2's dev-log).
+    if (doneCount > 0 && !hasDownloaded) {
+      setIsResetConfirmOpen(true)
+      return
+    }
+    performReset()
+  }
+
+  function handleConfirmReset() {
+    setIsResetConfirmOpen(false)
+    performReset()
   }
 
   function handleScanComplete(result: ScanResponse) {
@@ -111,7 +146,7 @@ function App() {
         </div>
         <button
           type="button"
-          onClick={handleReset}
+          onClick={handleResetClick}
           disabled={isGenerating(generationStatus)}
           title={
             isGenerating(generationStatus)
@@ -135,6 +170,37 @@ function App() {
 
       {toastMessage && (
         <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
+      )}
+
+      {isResetConfirmOpen && (
+        <Modal
+          title="リセットの確認"
+          onClose={() => setIsResetConfirmOpen(false)}
+        >
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-gray-700">
+              完了したセクションが{doneCount}件ありますが、まだダウンロード
+              していません。このままリセットすると、生成済みのカードは
+              失われます。
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsResetConfirmOpen(false)}
+                className={secondaryButtonClasses}
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReset}
+                className={`bg-red-600 ${primaryButtonClasses}`}
+              >
+                リセットする
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       <UploadPanel
@@ -175,7 +241,10 @@ function App() {
         onStatusChange={setGenerationStatus}
       />
 
-      <DownloadButton status={generationStatus} />
+      <DownloadButton
+        status={generationStatus}
+        onDownloaded={() => setHasDownloaded(true)}
+      />
     </div>
   )
 }

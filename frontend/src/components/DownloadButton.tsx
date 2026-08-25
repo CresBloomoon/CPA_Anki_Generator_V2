@@ -5,9 +5,13 @@ import { primaryButtonClasses } from '../styles'
 
 interface DownloadButtonProps {
   status: GenerationJobStatusResponse | null
+  // Called once the download actually succeeds (not on click) -- App.tsx
+  // uses this to know it's now safe to reset without warning the user
+  // about losing undownloaded cards (see Phase5-22's dev-log).
+  onDownloaded: () => void
 }
 
-export function DownloadButton({ status }: DownloadButtonProps) {
+export function DownloadButton({ status, onDownloaded }: DownloadButtonProps) {
   const [isDownloading, setIsDownloading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -44,6 +48,7 @@ export function DownloadButton({ status }: DownloadButtonProps) {
       link.click()
       link.remove()
       URL.revokeObjectURL(url)
+      onDownloaded()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
