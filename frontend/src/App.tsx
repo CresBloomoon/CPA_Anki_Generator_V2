@@ -27,19 +27,22 @@ function toSectionRow(section: SectionScanResult): SectionRow {
   }
 }
 
-// "生成中" = まだ完了しておらず、かつ1件も失敗していない状態。
-// 一部のセクションが失敗すると StartGenerationJobUsecase.run() がそこで
-// 処理を打ち切り、残りは永遠にPENDINGのまま止まる(Phase3-3の設計)。
-// この状態は「未完了」ではあるが実質的には停止済みなので、生成中とは
-// 扱わない(扱うとリセット手段が無くなり、ページリロードしか復帰方法が
-// 無くなってしまう)。
+// "生成中" = まだ完了しておらず、かつ1件も停止していない状態。
+// 一部のセクションが失敗する(FAILED)、あるいは途中のブロックまでは
+// 成功したが完走できなかった(PARTIALLY_DONE)と、
+// StartGenerationJobUsecase.run() がそこで処理を打ち切り、残りは永遠に
+// PENDINGのまま止まる(Phase3-3の設計)。この状態は「未完了」ではあるが
+// 実質的には停止済みなので、生成中とは扱わない(扱うとリセット手段が
+// 無くなり、ページリロードしか復帰方法が無くなってしまう)。
 function isGenerating(status: GenerationJobStatusResponse | null): boolean {
   if (!status) return false
   if (status.is_complete) return false
-  const hasFailure = status.section_jobs.some(
-    (sectionJob) => sectionJob.status === 'FAILED',
+  const hasStopped = status.section_jobs.some(
+    (sectionJob) =>
+      sectionJob.status === 'FAILED' ||
+      sectionJob.status === 'PARTIALLY_DONE',
   )
-  return !hasFailure
+  return !hasStopped
 }
 
 function App() {

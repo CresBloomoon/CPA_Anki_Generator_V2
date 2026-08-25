@@ -22,6 +22,7 @@ const STATUS_LABELS: Record<SectionJobStatus, string> = {
   PENDING: '待機中',
   RUNNING: '生成中',
   DONE: '完了',
+  PARTIALLY_DONE: '一部完了',
   FAILED: '失敗',
 }
 
@@ -29,6 +30,7 @@ const STATUS_BADGE_CLASSES: Record<SectionJobStatus, string> = {
   PENDING: 'bg-gray-100 text-gray-600',
   RUNNING: 'bg-blue-100 text-blue-700',
   DONE: 'bg-green-100 text-green-700',
+  PARTIALLY_DONE: 'bg-amber-100 text-amber-700',
   FAILED: 'bg-red-100 text-red-700',
 }
 
@@ -189,16 +191,19 @@ export function GenerationProgress({
                   {STATUS_LABELS[sectionJob.status]}
                 </span>
                 <span>{sectionJob.title}</span>
-                {sectionJob.status === 'DONE' && (
+                {(sectionJob.status === 'DONE' ||
+                  sectionJob.status === 'PARTIALLY_DONE') && (
                   <span className="text-gray-500">
                     （{sectionJob.card_count}枚）
                   </span>
                 )}
-                {sectionJob.status === 'FAILED' && sectionJob.error_message && (
-                  <span className="text-red-600">
-                    {sectionJob.error_message}
-                  </span>
-                )}
+                {(sectionJob.status === 'FAILED' ||
+                  sectionJob.status === 'PARTIALLY_DONE') &&
+                  sectionJob.error_message && (
+                    <span className="text-red-600">
+                      {sectionJob.error_message}
+                    </span>
+                  )}
               </li>
             ))}
           </ul>

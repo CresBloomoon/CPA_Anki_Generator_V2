@@ -60,7 +60,12 @@ export interface StartGenerationJobResponse {
   job_id: string
 }
 
-export type SectionJobStatus = 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED'
+export type SectionJobStatus =
+  | 'PENDING'
+  | 'RUNNING'
+  | 'DONE'
+  | 'PARTIALLY_DONE'
+  | 'FAILED'
 
 export interface SectionJobStatusResponse {
   title: string

@@ -13,8 +13,14 @@ export function DownloadButton({ status }: DownloadButtonProps) {
 
   if (!status) return null
 
+  // PARTIALLY_DONE sections also hold cards (see Phase4-8's
+  // on_block_generated callback) and are included in the backend's
+  // collect_generated_cards(), so they must count here too -- otherwise
+  // the button never appears for a job whose only section stopped partway
+  // through, silently keeping already-paid-for cards out of reach.
   const doneCount = status.section_jobs.filter(
-    (sectionJob) => sectionJob.status === 'DONE',
+    (sectionJob) =>
+      sectionJob.status === 'DONE' || sectionJob.status === 'PARTIALLY_DONE',
   ).length
 
   // Nothing to download yet -- GenerationProgress's own "0/N件完了"
