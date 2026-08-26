@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 _DEFAULT_HISTORY_PATH = (
-    Path(__file__).resolve().parents[3] / "root_path_history.json"
+    Path(__file__).resolve().parents[3] / "data" / "root_path_history.json"
 )
 _MAX_ENTRIES = 5
 

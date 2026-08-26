@@ -15,8 +15,11 @@ dist/
 # Claude Code (個人のローカル設定)
 .claude/settings.local.json
 
-# Runtime-generated app config (created on first save; see SettingsRepository)
-backend/settings.json
+# Runtime-generated app config (created on first save; see
+# SettingsRepository / RootPathHistoryRepository). Bind-mounted into the
+# backend container as /app/data (see docker-compose.yml) so it survives
+# container recreation.
+backend/data/
 
 # OS
 .DS_Store

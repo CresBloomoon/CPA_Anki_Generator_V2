@@ -5,6 +5,13 @@ services:
       - .env
     ports:
       - "8000:8000"
+    volumes:
+      # settings.json / root_path_history.json (SettingsRepository /
+      # RootPathHistoryRepository) live here so they survive container
+      # recreation (docker compose build/up), not just a plain restart of
+      # the same container. Bind mount (not a named volume) so the files
+      # are directly browsable/editable from the host.
+      - ./backend/data:/app/data
 
   frontend:
     build: ./frontend

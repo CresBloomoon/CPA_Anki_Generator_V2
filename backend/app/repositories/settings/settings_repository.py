@@ -6,7 +6,9 @@ from pathlib import Path
 
 from app.repositories.settings.available_models import AVAILABLE_MODELS_BY_PROVIDER
 
-_DEFAULT_SETTINGS_PATH = Path(__file__).resolve().parents[3] / "settings.json"
+_DEFAULT_SETTINGS_PATH = (
+    Path(__file__).resolve().parents[3] / "data" / "settings.json"
+)
 _DEFAULT_PROVIDER = "gemini"
 _DEFAULT_MODEL_NAME = "gemini-2.5-flash"
 
