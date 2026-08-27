@@ -18,10 +18,18 @@ class StartGenerationJobUsecase:
         job_store: JobStore,
         pdf_store: PdfStore,
         generate_cards_for_section_usecase: GenerateCardsForSectionUsecase,
+        max_consecutive_failures: int = 2,
     ) -> None:
         self._job_store = job_store
         self._pdf_store = pdf_store
         self._generate_cards_for_section_usecase = generate_cards_for_section_usecase
+        # See B-2's dev-log: a single section failing is usually specific to
+        # that section's content, not a sign the whole batch is doomed, so
+        # it no longer aborts the batch by itself. Consecutive failures
+        # reaching this threshold, however, are more likely a shared root
+        # cause (e.g. an invalid API key) -- a safety valve against
+        # repeating the same failure for every remaining section.
+        self._max_consecutive_failures = max_consecutive_failures
 
     def execute(self, sections: list[Section], additional_prompt: str = "") -> str:
         job = GenerationJob(
@@ -42,6 +50,10 @@ class StartGenerationJobUsecase:
         return job.job_id
 
     def run(self, job: GenerationJob) -> None:
+        # Counts only *consecutive* failures (reset to 0 on any success), not
+        # a total failure count -- one bad section sandwiched between two
+        # good ones shouldn't count against the batch (see B-2's dev-log).
+        consecutive_failures = 0
         for index, section_job in enumerate(job.section_jobs):
             job.mark_running(index)
             try:
@@ -57,6 +69,9 @@ class StartGenerationJobUsecase:
                     on_block_generated=section_job.cards.extend,
                 )
                 job.mark_done(index, cards)
-            except Exception as exc:  # noqa: BLE001 - any failure aborts the batch
+                consecutive_failures = 0
+            except Exception as exc:  # noqa: BLE001
                 job.mark_failed(index, str(exc))
-                break
+                consecutive_failures += 1
+                if consecutive_failures >= self._max_consecutive_failures:
+                    break

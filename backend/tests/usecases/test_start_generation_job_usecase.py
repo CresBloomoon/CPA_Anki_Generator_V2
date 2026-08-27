@@ -51,21 +51,71 @@ class _FakeGenerateCardsForSectionUsecase:
 
 
 class TestRun:
-    def test_one_failure_stops_the_batch_but_keeps_completed_sections(self) -> None:
-        # The Phase3-3 acceptance scenario: 3 sections, the 2nd fails.
-        # Expected: 1st DONE, 2nd FAILED, 3rd left PENDING, and
-        # collect_generated_cards() returns only the 1st section's cards.
+    def test_consecutive_failures_reaching_the_threshold_stops_the_batch_but_keeps_completed_sections(
+        self,
+    ) -> None:
+        # The Phase3-3 acceptance scenario, updated for B-2: a single
+        # failure no longer aborts the batch by itself (see
+        # test_a_single_failure_does_not_stop_the_batch below) -- only
+        # *consecutive* failures reaching the default threshold (2) do.
+        # 4 sections: 1st succeeds, 2nd and 3rd fail back-to-back (hitting
+        # the threshold), 4th is left untouched.
         section1 = _make_section("01節 A")
         section2 = _make_section("02節 B")
         section3 = _make_section("03節 C")
+        section4 = _make_section("04節 D")
         done_cards = [_make_card("card-1", section1)]
 
         def behavior(section: Section, on_block_generated) -> list[Card]:
             if section is section1:
                 return done_cards
             if section is section2:
-                raise RuntimeError("AI呼び出しが失敗しました")
-            raise AssertionError("section3 must not be processed")
+                raise RuntimeError("2節でAI呼び出しが失敗しました")
+            if section is section3:
+                raise RuntimeError("3節でAI呼び出しが失敗しました")
+            raise AssertionError("section4 must not be processed")
+
+        job_store = JobStore()
+        pdf_store = PdfStore()
+        pdf_store.save("book.pdf", b"pdf-bytes")
+        fake_generate = _FakeGenerateCardsForSectionUsecase(behavior)
+        usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
+
+        job = GenerationJob(
+            job_id="job-1",
+            section_jobs=[
+                SectionJob(section=section1),
+                SectionJob(section=section2),
+                SectionJob(section=section3),
+                SectionJob(section=section4),
+            ],
+        )
+
+        usecase.run(job)
+
+        assert job.section_jobs[0].status == SectionJobStatus.DONE
+        assert job.section_jobs[1].status == SectionJobStatus.FAILED
+        assert job.section_jobs[1].error_message == "2節でAI呼び出しが失敗しました"
+        assert job.section_jobs[2].status == SectionJobStatus.FAILED
+        assert job.section_jobs[2].error_message == "3節でAI呼び出しが失敗しました"
+        assert job.section_jobs[3].status == SectionJobStatus.PENDING
+        assert job.collect_generated_cards() == done_cards
+        assert len(fake_generate.calls) == 3  # section4 was never attempted
+
+    def test_a_single_failure_does_not_stop_the_batch(self) -> None:
+        # B-2: a single section's failure is usually specific to that
+        # section, not the whole batch -- the next section must still be
+        # attempted.
+        section1 = _make_section("01節 A")
+        section2 = _make_section("02節 B")
+        section3 = _make_section("03節 C")
+        cards1 = [_make_card("card-1", section1)]
+        cards3 = [_make_card("card-3", section3)]
+
+        def behavior(section: Section, on_block_generated) -> list[Card]:
+            if section is section2:
+                raise RuntimeError("2節でAI呼び出しが失敗しました")
+            return cards1 if section is section1 else cards3
 
         job_store = JobStore()
         pdf_store = PdfStore()
@@ -86,10 +136,92 @@ class TestRun:
 
         assert job.section_jobs[0].status == SectionJobStatus.DONE
         assert job.section_jobs[1].status == SectionJobStatus.FAILED
-        assert job.section_jobs[1].error_message == "AI呼び出しが失敗しました"
-        assert job.section_jobs[2].status == SectionJobStatus.PENDING
+        assert job.section_jobs[2].status == SectionJobStatus.DONE
+        assert len(fake_generate.calls) == 3  # section3 WAS attempted
+
+    def test_success_resets_the_consecutive_failure_count(self) -> None:
+        # 1 success -> 2 fail -> 3 success -> 4 fail -> 5 fail. Without the
+        # reset-on-success, the failures at section2 and section4 would
+        # already look "consecutive" and stop the batch right after
+        # section4. With the reset, the count only reaches the default
+        # threshold (2) at section5.
+        section1 = _make_section("01節")
+        section2 = _make_section("02節")
+        section3 = _make_section("03節")
+        section4 = _make_section("04節")
+        section5 = _make_section("05節")
+        section6 = _make_section("06節")
+        cards1 = [_make_card("card-1", section1)]
+        cards3 = [_make_card("card-3", section3)]
+
+        def behavior(section: Section, on_block_generated) -> list[Card]:
+            if section is section1:
+                return cards1
+            if section is section3:
+                return cards3
+            if section is section6:
+                raise AssertionError("section6 must not be processed")
+            raise RuntimeError(f"{section.title}でAI呼び出しが失敗しました")
+
+        job_store = JobStore()
+        pdf_store = PdfStore()
+        pdf_store.save("book.pdf", b"pdf-bytes")
+        fake_generate = _FakeGenerateCardsForSectionUsecase(behavior)
+        usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
+
+        job = GenerationJob(
+            job_id="job-1",
+            section_jobs=[
+                SectionJob(section=section1),
+                SectionJob(section=section2),
+                SectionJob(section=section3),
+                SectionJob(section=section4),
+                SectionJob(section=section5),
+                SectionJob(section=section6),
+            ],
+        )
+
+        usecase.run(job)
+
+        assert job.section_jobs[0].status == SectionJobStatus.DONE
+        assert job.section_jobs[1].status == SectionJobStatus.FAILED
+        assert job.section_jobs[2].status == SectionJobStatus.DONE
+        assert job.section_jobs[3].status == SectionJobStatus.FAILED
+        assert job.section_jobs[4].status == SectionJobStatus.FAILED
+        assert job.section_jobs[5].status == SectionJobStatus.PENDING
+        assert len(fake_generate.calls) == 5  # section6 was never attempted
+
+    def test_cards_from_a_section_after_a_skipped_failure_are_collected(
+        self,
+    ) -> None:
+        # B-2's "skip and continue" only matters if the cards from sections
+        # processed *after* a skipped failure actually make it into
+        # collect_generated_cards().
+        section1 = _make_section("01節 A")
+        section2 = _make_section("02節 B")
+        done_cards = [_make_card("card-2", section2)]
+
+        def behavior(section: Section, on_block_generated) -> list[Card]:
+            if section is section1:
+                raise RuntimeError("1節でAI呼び出しが失敗しました")
+            return done_cards
+
+        job_store = JobStore()
+        pdf_store = PdfStore()
+        pdf_store.save("book.pdf", b"pdf-bytes")
+        fake_generate = _FakeGenerateCardsForSectionUsecase(behavior)
+        usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
+
+        job = GenerationJob(
+            job_id="job-1",
+            section_jobs=[SectionJob(section=section1), SectionJob(section=section2)],
+        )
+
+        usecase.run(job)
+
+        assert job.section_jobs[0].status == SectionJobStatus.FAILED
+        assert job.section_jobs[1].status == SectionJobStatus.DONE
         assert job.collect_generated_cards() == done_cards
-        assert len(fake_generate.calls) == 2  # section3 was never attempted
 
     def test_all_sections_succeed(self) -> None:
         section1 = _make_section("01節 A")
