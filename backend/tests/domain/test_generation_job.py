@@ -61,6 +61,18 @@ class TestGenerationJobConstruction:
         )
         assert job.additional_prompt == "具体例を厚めに"
 
+    def test_idempotency_key_defaults_to_empty_string(self) -> None:
+        job = _make_job(1)
+        assert job.idempotency_key == ""
+
+    def test_idempotency_key_can_be_set_explicitly(self) -> None:
+        job = GenerationJob(
+            job_id="job-1",
+            section_jobs=[SectionJob(section=_make_section("01節"))],
+            idempotency_key="abc123",
+        )
+        assert job.idempotency_key == "abc123"
+
 
 class TestStateTransitions:
     def test_mark_running_from_pending_succeeds(self) -> None:

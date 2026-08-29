@@ -34,3 +34,15 @@ class JobStore:
                 return self._jobs[job_id]
             except KeyError:
                 raise JobNotFoundError(f"no job stored for job_id {job_id!r}") from None
+
+    def find_by_idempotency_key(self, key: str) -> GenerationJob | None:
+        # Plain lookup only -- no notion of "does this still count as a
+        # duplicate" (e.g. whether the match is already complete) lives
+        # here. That policy belongs to StartGenerationJobUsecase, the same
+        # way B-2's consecutive-failure threshold does (see Phase4-9's
+        # dev-log).
+        with self._lock:
+            for job in self._jobs.values():
+                if job.idempotency_key == key:
+                    return job
+        return None

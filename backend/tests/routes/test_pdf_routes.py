@@ -57,6 +57,28 @@ class TestUploadPdf:
         assert body["source_file"] == "book.pdf"
         assert body["size_bytes"] == len(pdf_bytes)
 
+    def test_reupload_same_filename_with_different_content_returns_409(
+        self, client: TestClient
+    ) -> None:
+        client.post(
+            "/pdfs",
+            files={"file": ("book.pdf", _build_fixture_pdf_with_toc(), "application/pdf")},
+        )
+
+        # A different PDF (different page count -> different bytes) under
+        # the same filename must not silently overwrite the first one.
+        doc = fitz.open()
+        doc.new_page(width=595, height=842)
+        other_pdf_bytes = doc.tobytes()
+        doc.close()
+
+        response = client.post(
+            "/pdfs",
+            files={"file": ("book.pdf", other_pdf_bytes, "application/pdf")},
+        )
+
+        assert response.status_code == 409
+
 
 class TestScanPdfs:
     def test_scan_returns_sections_with_hierarchy_reflected_in_deck_path(

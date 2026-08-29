@@ -5,7 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from app.dependencies import get_pdf_store, get_root_path_history_repository
 from app.domain.section import DeckPath
 from app.repositories.pdf.dto import PdfParsingError
-from app.repositories.pdf.pdf_store import PdfNotFoundError, PdfStore
+from app.repositories.pdf.pdf_store import (
+    PdfContentMismatchError,
+    PdfNotFoundError,
+    PdfStore,
+)
 from app.repositories.pdf.pdf_structure_repository import PdfStructureRepository
 from app.repositories.settings.root_path_history_repository import (
     RootPathHistoryRepository,
@@ -33,7 +37,10 @@ async def upload_pdf(
         raise HTTPException(status_code=400, detail="filename is required")
 
     pdf_bytes = await file.read()
-    pdf_store.save(file.filename, pdf_bytes)
+    try:
+        pdf_store.save(file.filename, pdf_bytes)
+    except PdfContentMismatchError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     return UploadPdfResponse(source_file=file.filename, size_bytes=len(pdf_bytes))
 

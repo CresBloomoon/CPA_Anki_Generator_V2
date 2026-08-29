@@ -1,6 +1,12 @@
+import hashlib
+
 import pytest
 
-from app.repositories.pdf.pdf_store import PdfNotFoundError, PdfStore
+from app.repositories.pdf.pdf_store import (
+    PdfContentMismatchError,
+    PdfNotFoundError,
+    PdfStore,
+)
 
 
 class TestPdfStore:
@@ -16,12 +22,30 @@ class TestPdfStore:
         with pytest.raises(PdfNotFoundError):
             store.get("missing.pdf")
 
-    def test_save_overwrites_existing_entry_for_the_same_source_file(self) -> None:
+    def test_resaving_the_same_source_file_with_identical_content_succeeds(
+        self,
+    ) -> None:
+        # Harmless no-op: re-uploading the exact same file (e.g. the user
+        # accidentally re-selects it) must not be treated as a conflict.
+        store = PdfStore()
+        store.save("book.pdf", b"pdf-bytes")
+        store.save("book.pdf", b"pdf-bytes")
+
+        assert store.get("book.pdf") == b"pdf-bytes"
+
+    def test_resaving_the_same_source_file_with_different_content_raises(
+        self,
+    ) -> None:
+        # Two different books that happen to share a filename must not
+        # silently clobber each other -- see Phase4-9's dev-log.
         store = PdfStore()
         store.save("book.pdf", b"first")
-        store.save("book.pdf", b"second")
 
-        assert store.get("book.pdf") == b"second"
+        with pytest.raises(PdfContentMismatchError):
+            store.save("book.pdf", b"second")
+
+        # The original content must survive the rejected overwrite attempt.
+        assert store.get("book.pdf") == b"first"
 
     def test_different_source_files_are_stored_independently(self) -> None:
         store = PdfStore()
@@ -30,3 +54,17 @@ class TestPdfStore:
 
         assert store.get("book1.pdf") == b"one"
         assert store.get("book2.pdf") == b"two"
+
+    def test_get_content_hash_returns_the_sha256_hex_digest(self) -> None:
+        store = PdfStore()
+        store.save("book.pdf", b"pdf-bytes")
+
+        assert store.get_content_hash("book.pdf") == hashlib.sha256(
+            b"pdf-bytes"
+        ).hexdigest()
+
+    def test_get_content_hash_missing_source_file_raises(self) -> None:
+        store = PdfStore()
+
+        with pytest.raises(PdfNotFoundError):
+            store.get_content_hash("missing.pdf")

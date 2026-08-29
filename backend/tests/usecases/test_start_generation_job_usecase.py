@@ -1,11 +1,17 @@
+import threading
 import time
+
+import pytest
 
 from app.domain.card import Card, CardContentItem
 from app.domain.generation_job import GenerationJob, SectionJob, SectionJobStatus
 from app.domain.section import DeckPath, PageRange, Section
 from app.repositories.jobs.job_store import JobStore
 from app.repositories.pdf.pdf_store import PdfStore
-from app.usecases.start_generation_job_usecase import StartGenerationJobUsecase
+from app.usecases.start_generation_job_usecase import (
+    DuplicateGenerationJobError,
+    StartGenerationJobUsecase,
+)
 
 
 def _make_section(title: str, source_file: str = "book.pdf") -> Section:
@@ -355,3 +361,103 @@ class TestExecute:
         job_id = usecase.execute([section], additional_prompt="具体例を厚めに")
 
         assert job_store.get(job_id).additional_prompt == "具体例を厚めに"
+
+
+class TestDuplicateDetection:
+    def test_duplicate_request_while_first_job_is_incomplete_raises(self) -> None:
+        # Reproduces a double-click or an automatic retry (see Phase4-9's
+        # dev-log): the first request's background thread is still
+        # running (blocked on release_event) when the identical second
+        # request arrives.
+        section = _make_section("01節 A")
+        release_event = threading.Event()
+
+        def behavior(section: Section, on_block_generated) -> list[Card]:
+            release_event.wait(timeout=2.0)
+            return [_make_card("card-1", section)]
+
+        job_store = JobStore()
+        pdf_store = PdfStore()
+        pdf_store.save("book.pdf", b"pdf-bytes")
+        fake_generate = _FakeGenerateCardsForSectionUsecase(behavior)
+        usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
+
+        first_job_id = usecase.execute([section])
+        first_job = job_store.get(first_job_id)
+        assert not first_job.is_complete()
+
+        try:
+            with pytest.raises(DuplicateGenerationJobError):
+                usecase.execute([section])
+        finally:
+            release_event.set()
+            deadline = time.monotonic() + 2.0
+            while not first_job.is_complete() and time.monotonic() < deadline:
+                time.sleep(0.01)
+
+    def test_same_request_is_allowed_again_after_the_first_job_completes(
+        self,
+    ) -> None:
+        section = _make_section("01節 A")
+
+        def behavior(section: Section, on_block_generated) -> list[Card]:
+            return [_make_card("card-1", section)]
+
+        job_store = JobStore()
+        pdf_store = PdfStore()
+        pdf_store.save("book.pdf", b"pdf-bytes")
+        fake_generate = _FakeGenerateCardsForSectionUsecase(behavior)
+        usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
+
+        first_job_id = usecase.execute([section])
+        first_job = job_store.get(first_job_id)
+        deadline = time.monotonic() + 2.0
+        while not first_job.is_complete() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert first_job.is_complete()
+
+        # Re-running the exact same request (e.g. to intentionally
+        # regenerate) must be allowed once the earlier job is done.
+        second_job_id = usecase.execute([section])
+
+        assert second_job_id != first_job_id
+
+    def test_different_additional_prompt_is_not_treated_as_duplicate(self) -> None:
+        section = _make_section("01節 A")
+
+        def behavior(section: Section, on_block_generated) -> list[Card]:
+            return [_make_card("card-1", section)]
+
+        job_store = JobStore()
+        pdf_store = PdfStore()
+        pdf_store.save("book.pdf", b"pdf-bytes")
+        fake_generate = _FakeGenerateCardsForSectionUsecase(behavior)
+        usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
+
+        first_job_id = usecase.execute([section], additional_prompt="")
+        second_job_id = usecase.execute([section], additional_prompt="具体例を厚めに")
+
+        assert second_job_id != first_job_id
+
+    def test_different_section_content_is_not_treated_as_duplicate(self) -> None:
+        section_a = _make_section("01節 A")
+        section_b = Section(
+            title=section_a.title,
+            page_range=section_a.page_range,
+            deck_path=DeckPath.from_string("Root::Different"),
+            source_file=section_a.source_file,
+        )
+
+        def behavior(section: Section, on_block_generated) -> list[Card]:
+            return [_make_card("card-1", section)]
+
+        job_store = JobStore()
+        pdf_store = PdfStore()
+        pdf_store.save("book.pdf", b"pdf-bytes")
+        fake_generate = _FakeGenerateCardsForSectionUsecase(behavior)
+        usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
+
+        first_job_id = usecase.execute([section_a])
+        second_job_id = usecase.execute([section_b])
+
+        assert second_job_id != first_job_id

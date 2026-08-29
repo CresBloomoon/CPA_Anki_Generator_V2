@@ -7,7 +7,7 @@ from app.domain.section import DeckPath, PageRange, Section
 from app.repositories.ai.base import AiCardGeneratorRepository
 from app.repositories.anki.anki_package_repository import AnkiPackageRepository
 from app.repositories.jobs.job_store import JobNotFoundError, JobStore
-from app.repositories.pdf.pdf_store import PdfStore
+from app.repositories.pdf.pdf_store import PdfNotFoundError, PdfStore
 from app.repositories.pdf.pdf_structure_repository import PdfStructureRepository
 from app.routes.page_range_display import to_internal_end_page
 from app.routes.schemas.generation import (
@@ -23,7 +23,10 @@ from app.usecases.generate_cards_for_section_usecase import (
 from app.usecases.get_generation_job_status_usecase import (
     GetGenerationJobStatusUsecase,
 )
-from app.usecases.start_generation_job_usecase import StartGenerationJobUsecase
+from app.usecases.start_generation_job_usecase import (
+    DuplicateGenerationJobError,
+    StartGenerationJobUsecase,
+)
 
 router = APIRouter()
 
@@ -57,7 +60,12 @@ def start_generation_job(
         PdfStructureRepository(), ai_repository
     )
     usecase = StartGenerationJobUsecase(job_store, pdf_store, generate_cards_usecase)
-    job_id = usecase.execute(sections, request.additional_prompt)
+    try:
+        job_id = usecase.execute(sections, request.additional_prompt)
+    except PdfNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except DuplicateGenerationJobError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     return StartGenerationJobResponse(job_id=job_id)
 

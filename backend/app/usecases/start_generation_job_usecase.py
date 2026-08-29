@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import threading
 import uuid
 
@@ -10,6 +11,19 @@ from app.repositories.pdf.pdf_store import PdfStore
 from app.usecases.generate_cards_for_section_usecase import (
     GenerateCardsForSectionUsecase,
 )
+
+
+class DuplicateGenerationJobError(Exception):
+    """Raised when an identical generation request is already running.
+
+    The idempotency key (see _build_idempotency_key) covers each selected
+    section's PDF content hash, page range, deck path and title, plus the
+    job's additional_prompt. A match against a job that isn't complete yet
+    is very likely a double-click or an automatic retry of the same
+    request (see Phase4-9's dev-log for the full incident this prevents),
+    not a deliberate new one -- once the matching job completes, the same
+    request is allowed again (e.g. to intentionally regenerate).
+    """
 
 
 class StartGenerationJobUsecase:
@@ -32,10 +46,19 @@ class StartGenerationJobUsecase:
         self._max_consecutive_failures = max_consecutive_failures
 
     def execute(self, sections: list[Section], additional_prompt: str = "") -> str:
+        idempotency_key = self._build_idempotency_key(sections, additional_prompt)
+
+        existing_job = self._job_store.find_by_idempotency_key(idempotency_key)
+        if existing_job is not None and not existing_job.is_complete():
+            raise DuplicateGenerationJobError(
+                "同じ内容のジョブが既に実行中です"
+            )
+
         job = GenerationJob(
             job_id=str(uuid.uuid4()),
             section_jobs=[SectionJob(section=section) for section in sections],
             additional_prompt=additional_prompt,
+            idempotency_key=idempotency_key,
         )
         self._job_store.save(job)
 
@@ -48,6 +71,28 @@ class StartGenerationJobUsecase:
         threading.Thread(target=self.run, args=(job,), daemon=True).start()
 
         return job.job_id
+
+    def _build_idempotency_key(
+        self, sections: list[Section], additional_prompt: str
+    ) -> str:
+        # Sorted so two requests selecting the same sections in a
+        # different order are still recognized as the same request (see
+        # Phase4-9's dev-log). Note: this calls pdf_store.get_content_hash()
+        # synchronously, so a section referencing a source_file that was
+        # never uploaded now surfaces as PdfNotFoundError from execute()
+        # itself, before any job is created.
+        section_signatures = sorted(
+            (
+                self._pdf_store.get_content_hash(section.source_file),
+                section.page_range.start_page,
+                section.page_range.end_page,
+                section.deck_path.joined(),
+                section.title,
+            )
+            for section in sections
+        )
+        canonical = repr((additional_prompt, section_signatures))
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
     def run(self, job: GenerationJob) -> None:
         # Counts only *consecutive* failures (reset to 0 on any success), not

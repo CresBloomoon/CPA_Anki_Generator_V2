@@ -34,6 +34,12 @@ class GenerationJob:
     job_id: str
     section_jobs: list[SectionJob]
     additional_prompt: str = ""
+    # Computed by StartGenerationJobUsecase from the PDF content hash and
+    # selected sections (see Phase4-9's dev-log) and used to detect
+    # duplicate submissions of the same generation request. Defaults to ""
+    # so tests that construct GenerationJob directly (not through the
+    # usecase) are unaffected.
+    idempotency_key: str = ""
 
     def __post_init__(self) -> None:
         if not self.job_id.strip():

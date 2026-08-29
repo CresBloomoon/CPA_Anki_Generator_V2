@@ -1,3 +1,4 @@
+import threading
 import time
 
 import fitz
@@ -18,13 +19,20 @@ from app.repositories.pdf.pdf_store import PdfStore
 
 
 class _FakeAiRepository(AiCardGeneratorRepository):
-    def __init__(self) -> None:
+    def __init__(self, release_event: threading.Event | None = None) -> None:
         self.calls: list[tuple[str, PromptContext]] = []
+        # Optional: lets a test hold the background generation thread open
+        # (see TestStartGenerationJob's duplicate-detection test) so it can
+        # deterministically submit a second, identical request while the
+        # first is still running.
+        self._release_event = release_event
 
     def generate_cards(
         self, section_text: str, prompt_context: PromptContext
     ) -> CardContent:
         self.calls.append((section_text, prompt_context))
+        if self._release_event is not None:
+            self._release_event.wait(timeout=2.0)
         item = CardContentItem(
             title="card",
             question="Q",
@@ -45,7 +53,7 @@ def client():
     test_job_store = JobStore()
     app.dependency_overrides[get_pdf_store] = lambda: test_pdf_store
     app.dependency_overrides[get_job_store] = lambda: test_job_store
-    app.dependency_overrides[get_ai_card_generator_repository] = _FakeAiRepository
+    app.dependency_overrides[get_ai_card_generator_repository] = lambda: _FakeAiRepository()
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
@@ -202,6 +210,33 @@ class TestStartGenerationJob:
         )
 
         assert response.status_code == 422
+
+    def test_unknown_source_file_returns_404(self, client: TestClient) -> None:
+        # execute() now computes the idempotency key from
+        # pdf_store.get_content_hash() before creating any job -- see
+        # Phase4-9's dev-log.
+        response = _start_generation_job(client, source_file="missing.pdf")
+
+        assert response.status_code == 404
+
+    def test_duplicate_request_while_first_job_is_running_returns_409(
+        self, client: TestClient
+    ) -> None:
+        _upload_fixture_pdf(client)
+        release_event = threading.Event()
+        app.dependency_overrides[get_ai_card_generator_repository] = (
+            lambda: _FakeAiRepository(release_event)
+        )
+
+        first_response = _start_generation_job(client)
+        assert first_response.status_code == 200
+
+        try:
+            second_response = _start_generation_job(client)
+            assert second_response.status_code == 409
+        finally:
+            release_event.set()
+            _wait_until_complete(client, first_response.json()["job_id"])
 
 
 class TestGetGenerationJobStatus:
