@@ -475,6 +475,14 @@ Step5（フロントエンド）に属するため、Phase番号はスライド�
 - 依存：Phase5-2, Phase5-8, Phase5-14（対象のフォーム要素が出揃った状態が前提）
 - Done when：Chrome DevTools Issuesで対象の46件＋2件の警告が解消される
 
+### Phase5-23（未着手）: 追加指示入力UI
+- 経緯：旧Streamlit版にあった「追加指示」入力UIがV2への移植時に抜け落ちていたことが、
+まーくんからの指摘で判明した。バックエンド側（`StartGenerationRequest`、
+`GenerateCardsForSectionUsecase`、`prompt_builder.py`）は既に対応済みで、フロントエンド
+単体の変更のため独立Phaseとして末尾に追加した。
+- 詳細要件：`docs/specs/additional-prompt-input-ui.md`を参照
+- 依存：Phase5-4（`GenerationProgress.tsx`が対象）
+
 ---
 ## Step 6: 結合＆実PDF検証
 
