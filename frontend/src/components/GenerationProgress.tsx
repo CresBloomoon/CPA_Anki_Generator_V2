@@ -10,7 +10,7 @@ import type {
   SectionJobStatus,
 } from '../api/types'
 import type { SectionRow } from './SectionTable'
-import { primaryButtonClasses } from '../styles'
+import { primaryButtonClasses, textInputClasses } from '../styles'
 
 const POLL_INTERVAL_MS = 2000
 // At the poll interval above, 10 consecutive failures is ~20 seconds --
@@ -68,6 +68,12 @@ export function GenerationProgress({
   const [isStarting, setIsStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pollError, setPollError] = useState<string | null>(null)
+  // Phase5-23: a single, job-wide free-text instruction forwarded to the AI
+  // prompt for every selected section (see additional-prompt-input-ui.md).
+  // No dedicated reset is needed -- App.tsx remounts this whole component
+  // (key={`progress-${resetKey}`}) on reset, which clears this local state
+  // along with the rest of the component's state.
+  const [additionalPrompt, setAdditionalPrompt] = useState('')
 
   const selectedRows = rows.filter((row) => row.selected)
   const canStart = selectedRows.length > 0 && !isStarting && jobId === null
@@ -78,7 +84,7 @@ export function GenerationProgress({
     try {
       const response = await startGenerationJob(
         selectedRows.map(toSectionInput),
-        '',
+        additionalPrompt,
       )
       setJobId(response.job_id)
     } catch (err) {
@@ -149,6 +155,20 @@ export function GenerationProgress({
 
   return (
     <div className="mt-4 flex flex-col gap-3 rounded-lg border border-gray-200 p-4">
+      <div className="flex flex-col gap-1">
+        <label htmlFor="additional-prompt-input" className="text-sm text-gray-700">
+          追加指示（任意）
+        </label>
+        <textarea
+          id="additional-prompt-input"
+          value={additionalPrompt}
+          onChange={(event) => setAdditionalPrompt(event.target.value)}
+          placeholder="計算テキストで例題もカード化して"
+          rows={3}
+          className={textInputClasses}
+        />
+      </div>
+
       <button
         type="button"
         onClick={handleStart}
