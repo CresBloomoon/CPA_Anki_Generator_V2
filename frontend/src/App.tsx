@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { UploadPanel } from './components/UploadPanel'
 import { SectionTable, type SectionRow } from './components/SectionTable'
 import { GenerationProgress } from './components/GenerationProgress'
@@ -82,6 +82,27 @@ function App() {
       (sectionJob) =>
         sectionJob.status === 'DONE' || sectionJob.status === 'PARTIALLY_DONE',
     ).length ?? 0
+
+  // Anything worth not losing to an accidental browser-level navigation
+  // (back button, reload, closing the tab) -- scanned results exist from
+  // here through generation and completion, until performReset() clears
+  // rows again. See Phase5-24's dev-log for the incident this guards
+  // against.
+  const hasUnsavedProgress = rows.length > 0
+
+  useEffect(() => {
+    function handleBeforeUnload(event: BeforeUnloadEvent) {
+      if (!hasUnsavedProgress) return
+      // Both are set for cross-browser compatibility -- the exact
+      // incantation browsers look for to trigger their own (non-
+      // customizable) confirmation dialog has historically differed.
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasUnsavedProgress])
 
   function handleSettingsSaved() {
     setIsSettingsModalOpen(false)
