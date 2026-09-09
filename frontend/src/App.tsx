@@ -4,20 +4,14 @@ import { SectionTable, type SectionRow } from './components/SectionTable'
 import { GenerationProgress } from './components/GenerationProgress'
 import { DownloadButton } from './components/DownloadButton'
 import { SettingsPanel } from './components/SettingsPanel'
-import { Modal } from './components/Modal'
 import { Toast } from './components/Toast'
-import { GearIcon } from './components/icons'
 import type {
   GenerationJobStatusResponse,
   ScanResponse,
   SectionScanResult,
 } from './api/types'
 import { createId } from './utils/id'
-import {
-  iconButtonClasses,
-  primaryButtonClasses,
-  secondaryButtonClasses,
-} from './styles'
+import { secondaryButtonClasses } from './styles'
 
 function toSectionRow(section: SectionScanResult): SectionRow {
   return {
@@ -65,13 +59,14 @@ function App() {
   // the same key, which React silently mishandled (duplicated DOM instead
   // of cleanly remounting) -- hence the "upload-"/"progress-" prefixes.
   const [resetKey, setResetKey] = useState(0)
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<'main' | 'settings' | 'history'>(
+    'main',
+  )
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   // Whether the current job's results have been downloaded at least once.
   // Reset to false on every performReset() -- see C-2's dev-log for why no
   // finer-grained "downloaded vs. newly completed since" tracking is done.
   const [hasDownloaded, setHasDownloaded] = useState(false)
-  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false)
 
   // Counts sections whose cards are actually downloadable (DONE or
   // PARTIALLY_DONE -- must match DownloadButton's own doneCount, otherwise
@@ -105,7 +100,9 @@ function App() {
   }, [hasUnsavedProgress])
 
   function handleSettingsSaved() {
-    setIsSettingsModalOpen(false)
+    // Phase5-25: settings moved from a modal to a tab -- stay on the
+    // settings tab after saving (there's no "close" concept anymore) and
+    // rely on the toast alone to confirm success.
     setToastMessage('保存しました')
   }
 
@@ -127,16 +124,16 @@ function App() {
 
   function handleResetClick() {
     // Undownloaded completed cards would be discarded silently otherwise --
-    // ask for confirmation first (see C-2's dev-log).
+    // ask for confirmation first (see C-2's dev-log). Phase5-25: switched
+    // from a custom Modal to the browser's own window.confirm() -- a
+    // visually distinct (e.g. red) warning button was judged unnecessary
+    // for this confirmation.
     if (doneCount > 0 && !hasDownloaded) {
-      setIsResetConfirmOpen(true)
-      return
+      const confirmed = window.confirm(
+        `完了したセクションが${doneCount}件ありますが、まだダウンロードしていません。このままリセットすると生成済みのカードは失われます。よろしいですか？`,
+      )
+      if (!confirmed) return
     }
-    performReset()
-  }
-
-  function handleConfirmReset() {
-    setIsResetConfirmOpen(false)
     performReset()
   }
 
@@ -150,21 +147,16 @@ function App() {
     setHasScanned(true)
   }
 
+  const tabs: { key: typeof activeTab; label: string }[] = [
+    { key: 'main', label: 'メイン' },
+    { key: 'settings', label: '設定' },
+    { key: 'history', label: '履歴' },
+  ]
+
   return (
     <div className="min-h-screen bg-white p-8 text-gray-900">
       <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-semibold">CPA Anki Generator V2</h1>
-          <button
-            type="button"
-            onClick={() => setIsSettingsModalOpen(true)}
-            aria-label="AIプロバイダー設定"
-            title="AIプロバイダー設定"
-            className={`text-gray-500 hover:text-gray-800 ${iconButtonClasses}`}
-          >
-            <GearIcon />
-          </button>
-        </div>
+        <h1 className="text-2xl font-semibold">CPA Anki Generator V2</h1>
         <button
           type="button"
           onClick={handleResetClick}
@@ -180,92 +172,81 @@ function App() {
         </button>
       </div>
 
-      {isSettingsModalOpen && (
-        <Modal
-          title="AIプロバイダー設定"
-          onClose={() => setIsSettingsModalOpen(false)}
-        >
-          <SettingsPanel onSaved={handleSettingsSaved} />
-        </Modal>
-      )}
+      <div className="mb-6 flex gap-4 border-b border-gray-200">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+            className={`-mb-px border-b-2 px-1 pb-2 text-sm font-medium ${
+              activeTab === tab.key
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
       {toastMessage && (
         <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
       )}
 
-      {isResetConfirmOpen && (
-        <Modal
-          title="リセットの確認"
-          onClose={() => setIsResetConfirmOpen(false)}
-        >
-          <div className="flex flex-col gap-4">
-            <p className="text-sm text-gray-700">
-              完了したセクションが{doneCount}件ありますが、まだダウンロード
-              していません。このままリセットすると、生成済みのカードは
-              失われます。
+      {activeTab === 'main' && (
+        <>
+          <UploadPanel
+            key={`upload-${resetKey}`}
+            onFilesUploaded={handleFilesUploaded}
+            onScanComplete={handleScanComplete}
+          />
+
+          {warnings.length > 0 && (
+            <ul className="mt-4 text-sm text-amber-700">
+              {warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          )}
+
+          {/*
+            エラー(UploadPanel側のerrorステート)ともwarningsとも別枠の、
+            あくまで情報提供のための空状態メッセージ。操作を妨げるもの
+            ではないため、ボタンの無効化などは一切行わない。テーブルの
+            「行を追加」から手動でセクションを積み上げられることも案内する。
+          */}
+          {hasScanned && rows.length === 0 && (
+            <p className="mt-4 text-sm text-gray-500">
+              セクションが見つかりませんでした。下の「行を追加」から手動で入力できます。
             </p>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setIsResetConfirmOpen(false)}
-                className={secondaryButtonClasses}
-              >
-                キャンセル
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmReset}
-                className={`bg-red-600 ${primaryButtonClasses}`}
-              >
-                リセットする
-              </button>
-            </div>
-          </div>
-        </Modal>
+          )}
+
+          <SectionTable
+            rows={rows}
+            onRowsChange={setRows}
+            sourceFileOptions={uploadedSourceFiles}
+          />
+
+          <GenerationProgress
+            key={`progress-${resetKey}`}
+            rows={rows}
+            onStatusChange={setGenerationStatus}
+          />
+
+          <DownloadButton
+            status={generationStatus}
+            onDownloaded={() => setHasDownloaded(true)}
+          />
+        </>
       )}
 
-      <UploadPanel
-        key={`upload-${resetKey}`}
-        onFilesUploaded={handleFilesUploaded}
-        onScanComplete={handleScanComplete}
-      />
-
-      {warnings.length > 0 && (
-        <ul className="mt-4 text-sm text-amber-700">
-          {warnings.map((warning) => (
-            <li key={warning}>{warning}</li>
-          ))}
-        </ul>
+      {activeTab === 'settings' && (
+        <SettingsPanel onSaved={handleSettingsSaved} />
       )}
 
-      {/*
-        エラー(UploadPanel側のerrorステート)ともwarningsとも別枠の、
-        あくまで情報提供のための空状態メッセージ。操作を妨げるもの
-        ではないため、ボタンの無効化などは一切行わない。テーブルの
-        「行を追加」から手動でセクションを積み上げられることも案内する。
-      */}
-      {hasScanned && rows.length === 0 && (
-        <p className="mt-4 text-sm text-gray-500">
-          セクションが見つかりませんでした。下の「行を追加」から手動で入力できます。
-        </p>
+      {activeTab === 'history' && (
+        <p className="text-sm text-gray-500">準備中です。</p>
       )}
-
-      <SectionTable
-        rows={rows}
-        onRowsChange={setRows}
-        sourceFileOptions={uploadedSourceFiles}
-      />
-
-      <GenerationProgress
-        key={`progress-${resetKey}`}
-        rows={rows}
-        onStatusChange={setGenerationStatus}
-      />
-
-      <DownloadButton
-        status={generationStatus}
-        onDownloaded={() => setHasDownloaded(true)}
-      />
     </div>
   )
 }
