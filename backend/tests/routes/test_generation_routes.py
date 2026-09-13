@@ -255,6 +255,8 @@ class TestGetGenerationJobStatus:
         assert body["section_jobs"][0]["status"] == "DONE"
         assert body["section_jobs"][0]["card_count"] == 1
         assert body["section_jobs"][0]["error_message"] is None
+        assert body["section_jobs"][0]["elapsed_seconds"] is not None
+        assert body["section_jobs"][0]["elapsed_seconds"] >= 0
 
     def test_unknown_job_id_returns_404(self, client: TestClient) -> None:
         response = client.get("/generation-jobs/does-not-exist")

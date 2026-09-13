@@ -89,6 +89,7 @@ def get_generation_job_status(
                 status=section_job.status.name,
                 card_count=len(section_job.cards),
                 error_message=section_job.error_message,
+                elapsed_seconds=section_job.elapsed_seconds(),
             )
             for section_job in job.section_jobs
         ],

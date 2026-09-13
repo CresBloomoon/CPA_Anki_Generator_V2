@@ -72,6 +72,9 @@ export interface SectionJobStatusResponse {
   status: SectionJobStatus
   card_count: number
   error_message: string | null
+  // Phase4-6: backend field only for now -- not yet displayed anywhere
+  // (see Phase5-26's planned progress table).
+  elapsed_seconds: number | null
 }
 
 export interface GenerationJobStatusResponse {

@@ -27,6 +27,7 @@ class SectionJobStatusResponse(BaseModel):
     status: str
     card_count: int
     error_message: str | None
+    elapsed_seconds: int | None
 
 
 class GenerationJobStatusResponse(BaseModel):

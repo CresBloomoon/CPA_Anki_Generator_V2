@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from app.domain.card import Card, CardContentItem
@@ -79,6 +81,7 @@ class TestStateTransitions:
         job = _make_job(1)
         job.mark_running(0)
         assert job.section_jobs[0].status == SectionJobStatus.RUNNING
+        assert job.section_jobs[0].started_at is not None
 
     def test_mark_running_from_non_pending_raises(self) -> None:
         job = _make_job(1)
@@ -93,6 +96,7 @@ class TestStateTransitions:
         job.mark_done(0, cards)
         assert job.section_jobs[0].status == SectionJobStatus.DONE
         assert job.section_jobs[0].cards == cards
+        assert job.section_jobs[0].finished_at is not None
 
     def test_mark_done_without_running_raises(self) -> None:
         job = _make_job(1)
@@ -105,6 +109,7 @@ class TestStateTransitions:
         job.mark_failed(0, "AI呼び出しが失敗しました")
         assert job.section_jobs[0].status == SectionJobStatus.FAILED
         assert job.section_jobs[0].error_message == "AI呼び出しが失敗しました"
+        assert job.section_jobs[0].finished_at is not None
 
     def test_mark_failed_without_running_raises(self) -> None:
         job = _make_job(1)
@@ -200,3 +205,31 @@ class TestCollectGeneratedCards:
 
         assert job.section_jobs[1].status == SectionJobStatus.PARTIALLY_DONE
         assert job.collect_generated_cards() == done_cards + partial_cards
+
+
+class TestElapsedSeconds:
+    def test_pending_section_has_no_elapsed_seconds(self) -> None:
+        job = _make_job(1)
+        assert job.section_jobs[0].elapsed_seconds() is None
+
+    def test_running_section_elapsed_seconds_measures_against_now(self) -> None:
+        # finished_at left unset (still RUNNING) -- elapsed_seconds() must
+        # keep advancing against the current time, not freeze at 0 (see
+        # Phase4-6's dev-log).
+        section_job = SectionJob(
+            section=_make_section("01節"),
+            status=SectionJobStatus.RUNNING,
+            started_at=datetime.now(timezone.utc) - timedelta(seconds=5),
+        )
+        assert section_job.elapsed_seconds() >= 5
+
+    def test_finished_section_elapsed_seconds_is_frozen(self) -> None:
+        started_at = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        finished_at = datetime(2026, 1, 1, 0, 0, 10, tzinfo=timezone.utc)
+        section_job = SectionJob(
+            section=_make_section("01節"),
+            status=SectionJobStatus.DONE,
+            started_at=started_at,
+            finished_at=finished_at,
+        )
+        assert section_job.elapsed_seconds() == 10

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from enum import Enum, auto
 
 from app.domain.card import Card
@@ -27,6 +28,18 @@ class SectionJob:
     status: SectionJobStatus = SectionJobStatus.PENDING
     cards: list[Card] = field(default_factory=list)
     error_message: str | None = None
+    # Recorded by mark_running()/mark_done()/mark_failed() (see Phase4-6's
+    # dev-log). Both None while PENDING.
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+    def elapsed_seconds(self) -> int | None:
+        if self.started_at is None:
+            return None
+        # Still RUNNING -- measure against now so the value keeps advancing
+        # across polls (see Phase4-6's dev-log) until finished_at freezes it.
+        end = self.finished_at or datetime.now(timezone.utc)
+        return int((end - self.started_at).total_seconds())
 
 
 @dataclass
@@ -50,11 +63,13 @@ class GenerationJob:
     def mark_running(self, index: int) -> None:
         section_job = self._require_status(index, SectionJobStatus.PENDING, "start")
         section_job.status = SectionJobStatus.RUNNING
+        section_job.started_at = datetime.now(timezone.utc)
 
     def mark_done(self, index: int, cards: list[Card]) -> None:
         section_job = self._require_status(index, SectionJobStatus.RUNNING, "complete")
         section_job.status = SectionJobStatus.DONE
         section_job.cards = list(cards)
+        section_job.finished_at = datetime.now(timezone.utc)
 
     def mark_failed(self, index: int, error_message: str) -> None:
         # Block-level progress (see GenerateCardsForSectionUsecase's
@@ -69,6 +84,7 @@ class GenerationJob:
             else SectionJobStatus.FAILED
         )
         section_job.error_message = error_message
+        section_job.finished_at = datetime.now(timezone.utc)
 
     def is_complete(self) -> bool:
         return all(
