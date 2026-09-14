@@ -1,7 +1,13 @@
+import pytest
+
 from app.domain.card import Card, CardContentItem
 from app.domain.generation_job import GenerationJob, SectionJob
 from app.domain.section import DeckPath, PageRange, Section
-from app.usecases.build_anki_package_usecase import BuildAnkiPackageUsecase
+from app.usecases.build_anki_package_usecase import (
+    BuildAnkiPackageUsecase,
+    SectionIndexNotFoundError,
+    SectionNotDownloadableError,
+)
 
 
 def _make_section(title: str) -> Section:
@@ -126,3 +132,79 @@ class TestBuildAnkiPackageUsecase:
 
         assert result.is_complete is False
         assert repository.calls == [[]]
+
+
+class TestExecuteForSection:
+    def test_done_section_returns_only_that_sections_cards(self) -> None:
+        section1 = _make_section("01節 A")
+        section2 = _make_section("02節 B")
+        job = GenerationJob(
+            job_id="job-1",
+            section_jobs=[SectionJob(section=section1), SectionJob(section=section2)],
+        )
+        job.mark_running(0)
+        cards1 = [_make_card("card-1", section1)]
+        job.mark_done(0, cards1)
+        job.mark_running(1)
+        cards2 = [_make_card("card-2", section2)]
+        job.mark_done(1, cards2)
+
+        repository = _FakeAnkiPackageRepository()
+        usecase = BuildAnkiPackageUsecase(repository)
+
+        result = usecase.execute_for_section(job, 0)
+
+        assert result.is_complete is True
+        assert result.apkg_bytes == b"fake-apkg-bytes"
+        # Only section1's cards -- section2's cards2 must not leak in.
+        assert repository.calls == [cards1]
+
+    def test_partially_done_section_is_complete_false(self) -> None:
+        section1 = _make_section("01節 A")
+        job = GenerationJob(job_id="job-1", section_jobs=[SectionJob(section=section1)])
+        job.mark_running(0)
+        partial_cards = [_make_card("card-1", section1)]
+        job.section_jobs[0].cards.extend(partial_cards)
+        job.mark_failed(0, "boom")
+        assert job.section_jobs[0].status.name == "PARTIALLY_DONE"
+
+        repository = _FakeAnkiPackageRepository()
+        usecase = BuildAnkiPackageUsecase(repository)
+
+        result = usecase.execute_for_section(job, 0)
+
+        assert result.is_complete is False
+        assert repository.calls == [partial_cards]
+
+    @pytest.mark.parametrize(
+        "behavior",
+        ["pending", "running", "failed_with_no_cards"],
+    )
+    def test_not_yet_downloadable_section_raises(self, behavior: str) -> None:
+        section1 = _make_section("01節 A")
+        job = GenerationJob(job_id="job-1", section_jobs=[SectionJob(section=section1)])
+        if behavior in ("running", "failed_with_no_cards"):
+            job.mark_running(0)
+        if behavior == "failed_with_no_cards":
+            job.mark_failed(0, "boom")
+
+        repository = _FakeAnkiPackageRepository()
+        usecase = BuildAnkiPackageUsecase(repository)
+
+        with pytest.raises(SectionNotDownloadableError):
+            usecase.execute_for_section(job, 0)
+        assert repository.calls == []
+
+    @pytest.mark.parametrize("section_index", [1, -1])
+    def test_out_of_range_section_index_raises(self, section_index: int) -> None:
+        section1 = _make_section("01節 A")
+        job = GenerationJob(job_id="job-1", section_jobs=[SectionJob(section=section1)])
+        job.mark_running(0)
+        job.mark_done(0, [_make_card("card-1", section1)])
+
+        repository = _FakeAnkiPackageRepository()
+        usecase = BuildAnkiPackageUsecase(repository)
+
+        with pytest.raises(SectionIndexNotFoundError):
+            usecase.execute_for_section(job, section_index)
+        assert repository.calls == []

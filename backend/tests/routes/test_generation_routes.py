@@ -286,3 +286,58 @@ class TestDownloadGenerationJobPackage:
         response = client.get("/generation-jobs/does-not-exist/download")
 
         assert response.status_code == 404
+
+
+class TestDownloadGenerationJobSectionPackage:
+    def test_download_returns_apkg_bytes_with_attachment_headers(
+        self, client: TestClient
+    ) -> None:
+        _upload_fixture_pdf(client)
+        start_response = _start_generation_job(client)
+        job_id = start_response.json()["job_id"]
+        _wait_until_complete(client, job_id)
+
+        response = client.get(f"/generation-jobs/{job_id}/sections/0/download")
+
+        assert response.status_code == 200
+        assert (
+            response.headers["content-disposition"]
+            == 'attachment; filename="generated_section.apkg"'
+        )
+        assert len(response.content) > 0
+
+    def test_unknown_job_id_returns_404(self, client: TestClient) -> None:
+        response = client.get("/generation-jobs/does-not-exist/sections/0/download")
+
+        assert response.status_code == 404
+
+    def test_out_of_range_section_index_returns_404(
+        self, client: TestClient
+    ) -> None:
+        _upload_fixture_pdf(client)
+        start_response = _start_generation_job(client)
+        job_id = start_response.json()["job_id"]
+        _wait_until_complete(client, job_id)
+
+        response = client.get(f"/generation-jobs/{job_id}/sections/1/download")
+
+        assert response.status_code == 404
+
+    def test_not_yet_downloadable_section_returns_409(
+        self, client: TestClient
+    ) -> None:
+        _upload_fixture_pdf(client)
+        release_event = threading.Event()
+        app.dependency_overrides[get_ai_card_generator_repository] = (
+            lambda: _FakeAiRepository(release_event)
+        )
+
+        start_response = _start_generation_job(client)
+        job_id = start_response.json()["job_id"]
+
+        try:
+            response = client.get(f"/generation-jobs/{job_id}/sections/0/download")
+            assert response.status_code == 409
+        finally:
+            release_event.set()
+            _wait_until_complete(client, job_id)

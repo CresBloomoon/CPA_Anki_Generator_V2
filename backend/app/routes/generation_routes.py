@@ -16,7 +16,12 @@ from app.routes.schemas.generation import (
     StartGenerationJobResponse,
     StartGenerationRequest,
 )
-from app.usecases.build_anki_package_usecase import BuildAnkiPackageUsecase
+from app.usecases.build_anki_package_usecase import (
+    AnkiPackageResult,
+    BuildAnkiPackageUsecase,
+    SectionIndexNotFoundError,
+    SectionNotDownloadableError,
+)
 from app.usecases.generate_cards_for_section_usecase import (
     GenerateCardsForSectionUsecase,
 )
@@ -96,6 +101,17 @@ def get_generation_job_status(
     )
 
 
+def _build_apkg_response(
+    result: AnkiPackageResult, complete_filename: str, partial_filename: str
+) -> Response:
+    filename = complete_filename if result.is_complete else partial_filename
+    return Response(
+        content=result.apkg_bytes,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/generation-jobs/{job_id}/download")
 def download_generation_job_package(
     job_id: str, job_store: JobStore = Depends(get_job_store)
@@ -109,9 +125,27 @@ def download_generation_job_package(
     build_usecase = BuildAnkiPackageUsecase(AnkiPackageRepository())
     result = build_usecase.execute(job)
 
-    filename = "generated.apkg" if result.is_complete else "generated_partial.apkg"
-    return Response(
-        content=result.apkg_bytes,
-        media_type="application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    return _build_apkg_response(result, "generated.apkg", "generated_partial.apkg")
+
+
+@router.get("/generation-jobs/{job_id}/sections/{section_index}/download")
+def download_generation_job_section_package(
+    job_id: str, section_index: int, job_store: JobStore = Depends(get_job_store)
+) -> Response:
+    status_usecase = GetGenerationJobStatusUsecase(job_store)
+    try:
+        job = status_usecase.execute(job_id)
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    build_usecase = BuildAnkiPackageUsecase(AnkiPackageRepository())
+    try:
+        result = build_usecase.execute_for_section(job, section_index)
+    except SectionIndexNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except SectionNotDownloadableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return _build_apkg_response(
+        result, "generated_section.apkg", "generated_section_partial.apkg"
     )
