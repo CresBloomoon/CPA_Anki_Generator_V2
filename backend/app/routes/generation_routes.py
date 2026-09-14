@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import re
+from urllib.parse import quote
+
 from fastapi import APIRouter, Depends, HTTPException, Response
 
 from app.dependencies import get_ai_card_generator_repository, get_job_store, get_pdf_store
@@ -101,14 +104,37 @@ def get_generation_job_status(
     )
 
 
+_FILENAME_UNSAFE_CHARS = re.compile(r'[\\/:*?"<>|]')
+
+
+def _sanitize_filename_component(name: str) -> str:
+    return _FILENAME_UNSAFE_CHARS.sub("_", name)
+
+
 def _build_apkg_response(
-    result: AnkiPackageResult, complete_filename: str, partial_filename: str
+    result: AnkiPackageResult,
+    complete_filename: str,
+    partial_filename: str,
+    display_name: str | None = None,
 ) -> Response:
-    filename = complete_filename if result.is_complete else partial_filename
+    ascii_filename = complete_filename if result.is_complete else partial_filename
+    disposition = f'attachment; filename="{ascii_filename}"'
+
+    if display_name is not None:
+        # display_name is a human-readable name (e.g. a section title) that
+        # may contain non-ASCII characters and/or characters unsafe in a
+        # filename -- RFC 5987's filename* carries it for modern clients,
+        # while filename= above stays as the ASCII-safe fallback for
+        # anything that doesn't understand filename* (see Phase4-10's
+        # dev-log).
+        suffix = "" if result.is_complete else "（一部完了）"
+        readable_name = _sanitize_filename_component(f"{display_name}{suffix}") + ".apkg"
+        disposition += f"; filename*=UTF-8''{quote(readable_name, safe='')}"
+
     return Response(
         content=result.apkg_bytes,
         media_type="application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": disposition},
     )
 
 
@@ -146,6 +172,10 @@ def download_generation_job_section_package(
     except SectionNotDownloadableError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
+    section_title = job.section_jobs[section_index].section.title
     return _build_apkg_response(
-        result, "generated_section.apkg", "generated_section_partial.apkg"
+        result,
+        "generated_section.apkg",
+        "generated_section_partial.apkg",
+        display_name=section_title,
     )

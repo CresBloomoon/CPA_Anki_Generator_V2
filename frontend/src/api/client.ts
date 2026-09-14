@@ -152,6 +152,14 @@ export interface DownloadedFile {
 function extractFilename(response: Response, fallback: string): string {
   const disposition = response.headers.get('Content-Disposition')
   if (!disposition) return fallback
+
+  // RFC 5987's filename* (e.g. filename*=UTF-8''%E7%AC%AC...) carries the
+  // real, possibly non-ASCII name and takes priority when present -- the
+  // plain filename="..." alongside it is only an ASCII-safe fallback for
+  // clients that don't understand filename* (see Phase4-10's dev-log).
+  const encodedMatch = /filename\*=UTF-8''([^;]+)/i.exec(disposition)
+  if (encodedMatch) return decodeURIComponent(encodedMatch[1])
+
   const match = /filename="([^"]+)"/.exec(disposition)
   return match ? match[1] : fallback
 }

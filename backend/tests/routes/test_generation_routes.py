@@ -1,5 +1,6 @@
 import threading
 import time
+from urllib.parse import quote
 
 import fitz
 import pytest
@@ -16,6 +17,8 @@ from app.repositories.ai.base import AiCardGeneratorRepository
 from app.repositories.ai.dto import PromptContext
 from app.repositories.jobs.job_store import JobStore
 from app.repositories.pdf.pdf_store import PdfStore
+from app.routes.generation_routes import _build_apkg_response
+from app.usecases.build_anki_package_usecase import AnkiPackageResult
 
 
 class _FakeAiRepository(AiCardGeneratorRepository):
@@ -76,14 +79,17 @@ def _upload_fixture_pdf(client: TestClient, filename: str = "book.pdf") -> None:
 
 
 def _start_generation_job(
-    client: TestClient, source_file: str = "book.pdf", additional_prompt: str = ""
+    client: TestClient,
+    source_file: str = "book.pdf",
+    additional_prompt: str = "",
+    title: str = "01節 会計の意義",
 ):
     return client.post(
         "/generation-jobs",
         json={
             "sections": [
                 {
-                    "title": "01節 会計の意義",
+                    "title": title,
                     "start_page": 1,
                     "end_page": None,
                     "deck_path": "Root::01節 会計の意義",
@@ -300,11 +306,28 @@ class TestDownloadGenerationJobSectionPackage:
         response = client.get(f"/generation-jobs/{job_id}/sections/0/download")
 
         assert response.status_code == 200
-        assert (
-            response.headers["content-disposition"]
-            == 'attachment; filename="generated_section.apkg"'
+        expected_readable_name = quote("01節 会計の意義.apkg", safe="")
+        assert response.headers["content-disposition"] == (
+            'attachment; filename="generated_section.apkg"; '
+            f"filename*=UTF-8''{expected_readable_name}"
         )
         assert len(response.content) > 0
+
+    def test_unsafe_characters_in_section_title_are_sanitized(
+        self, client: TestClient
+    ) -> None:
+        _upload_fixture_pdf(client)
+        start_response = _start_generation_job(client, title="A/B:C")
+        job_id = start_response.json()["job_id"]
+        _wait_until_complete(client, job_id)
+
+        response = client.get(f"/generation-jobs/{job_id}/sections/0/download")
+
+        expected_readable_name = quote("A_B_C.apkg", safe="")
+        assert response.headers["content-disposition"] == (
+            'attachment; filename="generated_section.apkg"; '
+            f"filename*=UTF-8''{expected_readable_name}"
+        )
 
     def test_unknown_job_id_returns_404(self, client: TestClient) -> None:
         response = client.get("/generation-jobs/does-not-exist/sections/0/download")
@@ -341,3 +364,51 @@ class TestDownloadGenerationJobSectionPackage:
         finally:
             release_event.set()
             _wait_until_complete(client, job_id)
+
+
+class TestBuildApkgResponse:
+    # Direct unit tests for the filename*/suffix logic. PARTIALLY_DONE is
+    # not reachable through this file's HTTP-level fixtures (it requires a
+    # multi-block AI fake failing partway through, see Phase4-8's
+    # dev-log), so the suffix-building logic is verified here instead of
+    # via a route round-trip.
+    def test_no_display_name_omits_filename_star(self) -> None:
+        result = AnkiPackageResult(apkg_bytes=b"bytes", is_complete=True)
+
+        response = _build_apkg_response(result, "generated.apkg", "generated_partial.apkg")
+
+        assert response.headers["content-disposition"] == (
+            'attachment; filename="generated.apkg"'
+        )
+
+    def test_complete_display_name_has_no_suffix(self) -> None:
+        result = AnkiPackageResult(apkg_bytes=b"bytes", is_complete=True)
+
+        response = _build_apkg_response(
+            result,
+            "generated_section.apkg",
+            "generated_section_partial.apkg",
+            display_name="01節 会計の意義",
+        )
+
+        expected_readable_name = quote("01節 会計の意義.apkg", safe="")
+        assert response.headers["content-disposition"] == (
+            'attachment; filename="generated_section.apkg"; '
+            f"filename*=UTF-8''{expected_readable_name}"
+        )
+
+    def test_partial_display_name_gets_suffix(self) -> None:
+        result = AnkiPackageResult(apkg_bytes=b"bytes", is_complete=False)
+
+        response = _build_apkg_response(
+            result,
+            "generated_section.apkg",
+            "generated_section_partial.apkg",
+            display_name="01節 会計の意義",
+        )
+
+        expected_readable_name = quote("01節 会計の意義（一部完了）.apkg", safe="")
+        assert response.headers["content-disposition"] == (
+            'attachment; filename="generated_section_partial.apkg"; '
+            f"filename*=UTF-8''{expected_readable_name}"
+        )
