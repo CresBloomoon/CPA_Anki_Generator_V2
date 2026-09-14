@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { UploadPanel } from './components/UploadPanel'
 import { SectionTable, type SectionRow } from './components/SectionTable'
 import { GenerationProgress } from './components/GenerationProgress'
-import { DownloadButton } from './components/DownloadButton'
 import { SettingsPanel } from './components/SettingsPanel'
 import { Toast } from './components/Toast'
 import type {
@@ -231,10 +230,6 @@ function App() {
             key={`progress-${resetKey}`}
             rows={rows}
             onStatusChange={setGenerationStatus}
-          />
-
-          <DownloadButton
-            status={generationStatus}
             onDownloaded={() => setHasDownloaded(true)}
           />
         </>

@@ -11,6 +11,8 @@ import type {
 } from '../api/types'
 import type { SectionRow } from './SectionTable'
 import { primaryButtonClasses, textInputClasses } from '../styles'
+import { DownloadButton } from './DownloadButton'
+import { SectionDownloadButton } from './SectionDownloadButton'
 
 const POLL_INTERVAL_MS = 2000
 // At the poll interval above, 10 consecutive failures is ~20 seconds --
@@ -34,6 +36,19 @@ const STATUS_BADGE_CLASSES: Record<SectionJobStatus, string> = {
   FAILED: 'bg-red-100 text-red-700',
 }
 
+function formatElapsedSeconds(seconds: number): string {
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`
+}
+
+function formatCardCount(status: SectionJobStatus, cardCount: number): string {
+  if (status === 'PENDING') return 'ー'
+  if (status === 'RUNNING') return `${cardCount}〜`
+  // DONE / PARTIALLY_DONE / FAILED (0件で終了) はいずれも確定値。
+  return `${cardCount}`
+}
+
 function toSectionInput(row: SectionRow): SectionInput {
   return {
     title: row.title,
@@ -55,11 +70,16 @@ interface GenerationProgressProps {
   // API now so that phase can just pass a callback without touching this
   // component's internals.
   onStatusChange?: (status: GenerationJobStatusResponse | null) => void
+  // Phase5-26: DownloadButton (whole job) now renders inside this
+  // component (above the progress table), so this callback is forwarded
+  // from App.tsx down to both it and each row's SectionDownloadButton.
+  onDownloaded: () => void
 }
 
 export function GenerationProgress({
   rows,
   onStatusChange,
+  onDownloaded,
 }: GenerationProgressProps) {
   const [jobId, setJobId] = useState<string | null>(null)
   const [status, setStatus] = useState<GenerationJobStatusResponse | null>(
@@ -151,7 +171,6 @@ export function GenerationProgress({
   const doneCount =
     status?.section_jobs.filter((job) => job.status === 'DONE').length ?? 0
   const totalCount = status?.section_jobs.length ?? 0
-  const progressPercent = totalCount > 0 ? (doneCount / totalCount) * 100 : 0
 
   return (
     <div className="mt-4 flex flex-col gap-3 rounded-lg border border-gray-200 p-4">
@@ -189,44 +208,73 @@ export function GenerationProgress({
 
       {status && (
         <div className="flex flex-col gap-2">
-          <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
-            <div
-              className="h-full bg-blue-600 transition-all"
-              style={{ width: `${progressPercent}%` }}
-            />
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-600">
+              全{totalCount}節中{doneCount}節完了
+            </p>
+            <DownloadButton status={status} onDownloaded={onDownloaded} />
           </div>
-          <p className="text-sm text-gray-600">
-            {doneCount} / {totalCount} 件完了
-          </p>
 
-          <ul className="flex flex-col gap-1 text-sm">
-            {status.section_jobs.map((sectionJob, index) => (
-              <li
-                key={`${sectionJob.title}-${index}`}
-                className="flex items-center gap-2"
-              >
-                <span
-                  className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASSES[sectionJob.status]}`}
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-gray-200 text-xs text-gray-500">
+                <th className="py-1 pr-2 font-medium">状態</th>
+                <th className="py-1 pr-2 font-medium">節</th>
+                <th className="py-1 pr-2 font-medium">経過時間</th>
+                <th className="py-1 pr-2 font-medium">枚数</th>
+                <th className="py-1 font-medium">
+                  <span className="sr-only">操作</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {status.section_jobs.map((sectionJob, index) => (
+                <tr
+                  key={`${sectionJob.title}-${index}`}
+                  className="border-b border-gray-100 last:border-0"
                 >
-                  {STATUS_LABELS[sectionJob.status]}
-                </span>
-                <span>{sectionJob.title}</span>
-                {(sectionJob.status === 'DONE' ||
-                  sectionJob.status === 'PARTIALLY_DONE') && (
-                  <span className="text-gray-500">
-                    （{sectionJob.card_count}枚）
-                  </span>
-                )}
-                {(sectionJob.status === 'FAILED' ||
-                  sectionJob.status === 'PARTIALLY_DONE') &&
-                  sectionJob.error_message && (
-                    <span className="text-red-600">
-                      {sectionJob.error_message}
+                  <td className="py-1.5 pr-2">
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASSES[sectionJob.status]}`}
+                    >
+                      {sectionJob.status === 'RUNNING' && (
+                        <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                      )}
+                      {STATUS_LABELS[sectionJob.status]}
                     </span>
-                  )}
-              </li>
-            ))}
-          </ul>
+                  </td>
+                  <td className="py-1.5 pr-2">
+                    <div className="flex flex-col">
+                      <span>{sectionJob.title}</span>
+                      {(sectionJob.status === 'FAILED' ||
+                        sectionJob.status === 'PARTIALLY_DONE') &&
+                        sectionJob.error_message && (
+                          <span className="text-xs text-red-600">
+                            {sectionJob.error_message}
+                          </span>
+                        )}
+                    </div>
+                  </td>
+                  <td className="py-1.5 pr-2 text-gray-500">
+                    {sectionJob.elapsed_seconds === null
+                      ? 'ー'
+                      : formatElapsedSeconds(sectionJob.elapsed_seconds)}
+                  </td>
+                  <td className="py-1.5 pr-2 text-gray-500">
+                    {formatCardCount(sectionJob.status, sectionJob.card_count)}
+                  </td>
+                  <td className="py-1.5">
+                    <SectionDownloadButton
+                      jobId={jobId!}
+                      sectionIndex={index}
+                      status={sectionJob.status}
+                      onDownloaded={onDownloaded}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

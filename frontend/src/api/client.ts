@@ -174,3 +174,23 @@ export async function downloadGenerationJobPackage(
   const filename = extractFilename(response, 'generated.apkg')
   return { blob, filename }
 }
+
+export async function downloadGenerationJobSectionPackage(
+  jobId: string,
+  sectionIndex: number,
+): Promise<DownloadedFile> {
+  const response = await fetch(
+    `/generation-jobs/${encodeURIComponent(jobId)}/sections/${sectionIndex}/download`,
+  )
+
+  if (response.status === 404) {
+    throw new GenerationJobNotFoundError(await extractErrorMessage(response))
+  }
+  if (!response.ok) {
+    throw new Error(await extractErrorMessage(response))
+  }
+
+  const blob = await response.blob()
+  const filename = extractFilename(response, 'generated_section.apkg')
+  return { blob, filename }
+}

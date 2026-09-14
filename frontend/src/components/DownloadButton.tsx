@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { downloadGenerationJobPackage } from '../api/client'
 import type { GenerationJobStatusResponse } from '../api/types'
 import { primaryButtonClasses } from '../styles'
+import { triggerDownload } from '../utils/download'
 
 interface DownloadButtonProps {
   status: GenerationJobStatusResponse | null
@@ -37,17 +38,8 @@ export function DownloadButton({ status, onDownloaded }: DownloadButtonProps) {
     setIsDownloading(true)
     setError(null)
     try {
-      const { blob, filename } = await downloadGenerationJobPackage(
-        status!.job_id,
-      )
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = filename
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      URL.revokeObjectURL(url)
+      const file = await downloadGenerationJobPackage(status!.job_id)
+      triggerDownload(file)
       onDownloaded()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
