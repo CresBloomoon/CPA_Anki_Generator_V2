@@ -10,6 +10,7 @@ import type {
   SectionScanResult,
 } from './api/types'
 import { createId } from './utils/id'
+import { setFaviconIcon } from './utils/favicon'
 import { secondaryButtonClasses } from './styles'
 
 function toSectionRow(section: SectionScanResult): SectionRow {
@@ -97,6 +98,25 @@ function App() {
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [hasUnsavedProgress])
+
+  const isCurrentlyGenerating = isGenerating(generationStatus)
+
+  // Phase5-27: drives the tab favicon (blue dot while generating, green dot
+  // while there's downloadable output still sitting undownloaded). Neither
+  // depends on tab visibility -- both are meant to be visible at a glance
+  // regardless of whether the user is currently looking at the tab.
+  const hasUndownloadedCompletion =
+    !isCurrentlyGenerating && doneCount > 0 && !hasDownloaded
+
+  const faviconIconKind = isCurrentlyGenerating
+    ? 'generating'
+    : hasUndownloadedCompletion
+      ? 'completed'
+      : null
+
+  useEffect(() => {
+    void setFaviconIcon(faviconIconKind)
+  }, [faviconIconKind])
 
   function handleSettingsSaved() {
     // Phase5-25: settings moved from a modal to a tab -- stay on the
