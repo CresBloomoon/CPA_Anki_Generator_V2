@@ -4,6 +4,7 @@ import hashlib
 import threading
 import uuid
 
+from app.domain.card import Card
 from app.domain.generation_job import GenerationJob, SectionJob
 from app.domain.section import Section
 from app.repositories.jobs.job_store import JobStore
@@ -116,15 +117,25 @@ class StartGenerationJobUsecase:
             self._job_store.save(job)
             try:
                 pdf_bytes = self._pdf_store.get(section_job.section.source_file)
+
+                def persist_block(block_cards: list[Card]) -> None:
+                    # Extends onto *this* loop iteration's section_job/job
+                    # (captured by closure) and re-saves immediately, so a
+                    # GenerationJobRepository wired into job_store writes
+                    # each block to disk as soon as it's generated (see
+                    # Phase7-2-2's dev-log) rather than only at
+                    # mark_running/mark_done/mark_failed. Safe as a closure
+                    # despite living inside the loop: execute() below calls
+                    # it synchronously within the same iteration, before
+                    # section_job/job are ever rebound by the next one.
+                    section_job.cards.extend(block_cards)
+                    self._job_store.save(job)
+
                 cards = self._generate_cards_for_section_usecase.execute(
                     section_job.section,
                     pdf_bytes,
                     job.additional_prompt,
-                    # Persist each block's cards onto the SectionJob as soon
-                    # as they're generated, so a later block's failure
-                    # (caught below) still leaves earlier blocks' cards in
-                    # place -- see Phase4-8's dev-log.
-                    on_block_generated=section_job.cards.extend,
+                    on_block_generated=persist_block,
                 )
                 job.mark_done(index, cards)
                 self._job_store.save(job)

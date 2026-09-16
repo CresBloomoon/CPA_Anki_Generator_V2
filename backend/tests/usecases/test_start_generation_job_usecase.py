@@ -1,11 +1,13 @@
 import threading
 import time
+from pathlib import Path
 
 import pytest
 
 from app.domain.card import Card, CardContentItem
 from app.domain.generation_job import GenerationJob, SectionJob, SectionJobStatus
 from app.domain.section import DeckPath, PageRange, Section
+from app.repositories.jobs.generation_job_repository import GenerationJobRepository
 from app.repositories.jobs.job_store import JobStore
 from app.repositories.pdf.pdf_store import PdfStore
 from app.usecases.start_generation_job_usecase import (
@@ -54,6 +56,31 @@ class _SpyJobStore(JobStore):
     def save(self, job: GenerationJob) -> None:
         self.save_calls += 1
         super().save(job)
+
+
+class _RecordingGenerationJobRepository(GenerationJobRepository):
+    """Records section_jobs[0]'s raw card count written on every save(), on
+    top of the real on-disk write -- lets a test confirm writes happen
+    incrementally, one per block, rather than only checking the final
+    on-disk content.
+
+    Deliberately reads section_job.cards directly rather than
+    job.collect_generated_cards(): the latter only counts DONE/
+    PARTIALLY_DONE section_jobs (a confirmed-complete-cards view, by
+    design -- see Phase1-4's dev-log), so it stays 0 for a still-RUNNING
+    section_job no matter how many cards have actually been extended onto
+    it. What this test needs to observe is the raw count actually written
+    to disk at each point, which section_job.cards reflects regardless of
+    status (see Phase7-2-2's dev-log for the test failure this fixes).
+    """
+
+    def __init__(self, jobs_dir: Path) -> None:
+        super().__init__(jobs_dir=jobs_dir)
+        self.saved_card_counts: list[int] = []
+
+    def save(self, job: GenerationJob) -> None:
+        super().save(job)
+        self.saved_card_counts.append(len(job.section_jobs[0].cards))
 
 
 class _FakeGenerateCardsForSectionUsecase:
@@ -369,6 +396,106 @@ class TestRun:
 
         # mark_running + mark_failed.
         assert job_store.save_calls == 2
+
+    def test_run_persists_state_after_each_block_within_a_section(self) -> None:
+        # A section split into 2 blocks: each on_block_generated call must
+        # now also trigger a save(), on top of the section-level
+        # mark_running/mark_done saves added in Phase7-2-1 (see
+        # Phase7-2-2's dev-log).
+        section1 = _make_section("01節 A")
+        block1_cards = [_make_card("block-1", section1)]
+        block2_cards = [_make_card("block-2", section1)]
+
+        def behavior(section: Section, on_block_generated) -> list[Card]:
+            on_block_generated(block1_cards)
+            on_block_generated(block2_cards)
+            return block1_cards + block2_cards
+
+        job_store = _SpyJobStore()
+        pdf_store = PdfStore()
+        pdf_store.save("book.pdf", b"pdf-bytes")
+        fake_generate = _FakeGenerateCardsForSectionUsecase(behavior)
+        usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
+
+        job = GenerationJob(job_id="job-1", section_jobs=[SectionJob(section=section1)])
+
+        usecase.run(job)
+
+        # mark_running + block1 + block2 + mark_done = 4 saves.
+        assert job_store.save_calls == 4
+        assert job.section_jobs[0].cards == block1_cards + block2_cards
+
+    def test_run_persists_state_after_a_partial_block_before_failing(self) -> None:
+        section1 = _make_section("01節 A")
+        partial_cards = [_make_card("block-1-card", section1)]
+
+        def behavior(section: Section, on_block_generated) -> list[Card]:
+            on_block_generated(partial_cards)
+            raise RuntimeError("ブロック2/2でAI呼び出しが失敗しました")
+
+        job_store = _SpyJobStore()
+        pdf_store = PdfStore()
+        pdf_store.save("book.pdf", b"pdf-bytes")
+        fake_generate = _FakeGenerateCardsForSectionUsecase(behavior)
+        usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
+
+        job = GenerationJob(job_id="job-1", section_jobs=[SectionJob(section=section1)])
+
+        usecase.run(job)
+
+        # mark_running + block1 + mark_failed = 3 saves.
+        assert job_store.save_calls == 3
+
+    def test_run_writes_to_disk_incrementally_as_each_block_completes(
+        self, tmp_path: Path
+    ) -> None:
+        section1 = _make_section("01節 A")
+        block1_cards = [_make_card("block-1", section1)]
+        block2_cards = [_make_card("block-2", section1)]
+
+        def behavior(section: Section, on_block_generated) -> list[Card]:
+            on_block_generated(block1_cards)
+            on_block_generated(block2_cards)
+            return block1_cards + block2_cards
+
+        repository = _RecordingGenerationJobRepository(tmp_path)
+        job_store = JobStore(repository)
+        pdf_store = PdfStore()
+        pdf_store.save("book.pdf", b"pdf-bytes")
+        fake_generate = _FakeGenerateCardsForSectionUsecase(behavior)
+        usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
+
+        job = GenerationJob(job_id="job-1", section_jobs=[SectionJob(section=section1)])
+
+        usecase.run(job)
+
+        # mark_running(0 cards) -> block1(1) -> block2(2) -> mark_done(2).
+        assert repository.saved_card_counts == [0, 1, 2, 2]
+        loaded = repository.get("job-1")
+        assert loaded is not None
+        assert loaded.collect_generated_cards() == block1_cards + block2_cards
+
+    def test_run_does_not_touch_disk_across_blocks_when_no_repository_is_configured(
+        self, tmp_path: Path
+    ) -> None:
+        section1 = _make_section("01節 A")
+        block1_cards = [_make_card("block-1", section1)]
+
+        def behavior(section: Section, on_block_generated) -> list[Card]:
+            on_block_generated(block1_cards)
+            return block1_cards
+
+        job_store = JobStore()  # no GenerationJobRepository wired in
+        pdf_store = PdfStore()
+        pdf_store.save("book.pdf", b"pdf-bytes")
+        fake_generate = _FakeGenerateCardsForSectionUsecase(behavior)
+        usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
+
+        job = GenerationJob(job_id="job-1", section_jobs=[SectionJob(section=section1)])
+
+        usecase.run(job)
+
+        assert list(tmp_path.iterdir()) == []
 
 
 class TestExecute:
