@@ -69,7 +69,7 @@ def start_generation_job(
     )
     usecase = StartGenerationJobUsecase(job_store, pdf_store, generate_cards_usecase)
     try:
-        job_id = usecase.execute(sections, request.additional_prompt)
+        job_id = usecase.execute(sections, request.additional_prompt, request.root_path)
     except PdfNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except DuplicateGenerationJobError as exc:

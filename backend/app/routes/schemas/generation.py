@@ -14,6 +14,11 @@ class SectionInput(BaseModel):
 class StartGenerationRequest(BaseModel):
     sections: list[SectionInput]
     additional_prompt: str = ""
+    # The deck path prefix used at scan time, stored on the GenerationJob
+    # purely for history-list display (see Phase7-2's dev-log). Not sent by
+    # the frontend yet -- that wiring is a separate, later Phase -- so this
+    # defaults to "" until then.
+    root_path: str = ""
 
 
 class StartGenerationJobResponse(BaseModel):

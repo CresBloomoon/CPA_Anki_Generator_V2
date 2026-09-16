@@ -53,6 +53,12 @@ class GenerationJob:
     # so tests that construct GenerationJob directly (not through the
     # usecase) are unaffected.
     idempotency_key: str = ""
+    # The deck path prefix the user typed at scan time (see Phase7-2's
+    # dev-log). Not used by generation itself -- each Section's deck_path
+    # already has it baked in -- this is purely so the history list can
+    # show a job-level heading without guessing it back out of individual
+    # sections' deck_paths.
+    root_path: str = ""
 
     def __post_init__(self) -> None:
         if not self.job_id.strip():

@@ -38,6 +38,24 @@ def _make_card(title: str, section: Section) -> Card:
     return Card(content=item, section_title=section.title, deck_path=section.deck_path)
 
 
+class _SpyJobStore(JobStore):
+    """Counts save() calls to verify run() persists after each transition.
+
+    See test_run_persists_state_after_each_transition/..._even_when_a_
+    section_fails below -- these check the *trigger points*, while
+    GenerationJobRepository's own round-trip test (see Phase7-2's dev-log)
+    checks the actual on-disk content.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.save_calls = 0
+
+    def save(self, job: GenerationJob) -> None:
+        self.save_calls += 1
+        super().save(job)
+
+
 class _FakeGenerateCardsForSectionUsecase:
     def __init__(self, behavior) -> None:
         self._behavior = behavior
@@ -306,6 +324,52 @@ class TestRun:
         assert job.section_jobs[0].cards == partial_cards
         assert job.collect_generated_cards() == partial_cards
 
+    def test_run_persists_state_after_each_transition(self) -> None:
+        # See Phase7-2's dev-log: run() mutates the shared job object
+        # directly, so persistence (when a GenerationJobRepository is
+        # wired into JobStore) only happens if run() explicitly re-saves
+        # after every mark_running/mark_done/mark_failed call. 2 sections,
+        # both succeed: mark_running + mark_done for each = 4 saves.
+        section1 = _make_section("01節 A")
+        section2 = _make_section("02節 B")
+
+        def behavior(section: Section, on_block_generated) -> list[Card]:
+            return [_make_card(f"card-{section.title}", section)]
+
+        job_store = _SpyJobStore()
+        pdf_store = PdfStore()
+        pdf_store.save("book.pdf", b"pdf-bytes")
+        fake_generate = _FakeGenerateCardsForSectionUsecase(behavior)
+        usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
+
+        job = GenerationJob(
+            job_id="job-1",
+            section_jobs=[SectionJob(section=section1), SectionJob(section=section2)],
+        )
+
+        usecase.run(job)
+
+        assert job_store.save_calls == 4
+
+    def test_run_persists_state_even_when_a_section_fails(self) -> None:
+        section1 = _make_section("01節 A")
+
+        def behavior(section: Section, on_block_generated) -> list[Card]:
+            raise RuntimeError("1節でAI呼び出しが失敗しました")
+
+        job_store = _SpyJobStore()
+        pdf_store = PdfStore()
+        pdf_store.save("book.pdf", b"pdf-bytes")
+        fake_generate = _FakeGenerateCardsForSectionUsecase(behavior)
+        usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
+
+        job = GenerationJob(job_id="job-1", section_jobs=[SectionJob(section=section1)])
+
+        usecase.run(job)
+
+        # mark_running + mark_failed.
+        assert job_store.save_calls == 2
+
 
 class TestExecute:
     def test_returns_a_job_id_and_registers_the_job_immediately(self) -> None:
@@ -361,6 +425,34 @@ class TestExecute:
         job_id = usecase.execute([section], additional_prompt="具体例を厚めに")
 
         assert job_store.get(job_id).additional_prompt == "具体例を厚めに"
+
+    def test_root_path_defaults_to_empty_string_on_the_job(self) -> None:
+        section = _make_section("01節 A")
+        job_store = JobStore()
+        pdf_store = PdfStore()
+        pdf_store.save("book.pdf", b"pdf-bytes")
+        fake_generate = _FakeGenerateCardsForSectionUsecase(
+            lambda section, on_block_generated: [_make_card("card-1", section)]
+        )
+        usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
+
+        job_id = usecase.execute([section])
+
+        assert job_store.get(job_id).root_path == ""
+
+    def test_root_path_is_stored_on_the_job_when_given(self) -> None:
+        section = _make_section("01節 A")
+        job_store = JobStore()
+        pdf_store = PdfStore()
+        pdf_store.save("book.pdf", b"pdf-bytes")
+        fake_generate = _FakeGenerateCardsForSectionUsecase(
+            lambda section, on_block_generated: [_make_card("card-1", section)]
+        )
+        usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
+
+        job_id = usecase.execute([section], root_path="公認会計士試験::監査論")
+
+        assert job_store.get(job_id).root_path == "公認会計士試験::監査論"
 
 
 class TestDuplicateDetection:

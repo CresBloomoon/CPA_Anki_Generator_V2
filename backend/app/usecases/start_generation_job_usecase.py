@@ -45,7 +45,12 @@ class StartGenerationJobUsecase:
         # repeating the same failure for every remaining section.
         self._max_consecutive_failures = max_consecutive_failures
 
-    def execute(self, sections: list[Section], additional_prompt: str = "") -> str:
+    def execute(
+        self,
+        sections: list[Section],
+        additional_prompt: str = "",
+        root_path: str = "",
+    ) -> str:
         idempotency_key = self._build_idempotency_key(sections, additional_prompt)
 
         existing_job = self._job_store.find_by_idempotency_key(idempotency_key)
@@ -59,6 +64,7 @@ class StartGenerationJobUsecase:
             section_jobs=[SectionJob(section=section) for section in sections],
             additional_prompt=additional_prompt,
             idempotency_key=idempotency_key,
+            root_path=root_path,
         )
         self._job_store.save(job)
 
@@ -101,6 +107,13 @@ class StartGenerationJobUsecase:
         consecutive_failures = 0
         for index, section_job in enumerate(job.section_jobs):
             job.mark_running(index)
+            # Re-saving after every state transition below is what actually
+            # triggers a disk write when the JobStore was given a
+            # GenerationJobRepository (see Phase7-2's dev-log) -- mutating
+            # the shared job object in place is not enough on its own,
+            # unlike the in-memory-only case where JobStore already held a
+            # reference to the same object.
+            self._job_store.save(job)
             try:
                 pdf_bytes = self._pdf_store.get(section_job.section.source_file)
                 cards = self._generate_cards_for_section_usecase.execute(
@@ -114,9 +127,11 @@ class StartGenerationJobUsecase:
                     on_block_generated=section_job.cards.extend,
                 )
                 job.mark_done(index, cards)
+                self._job_store.save(job)
                 consecutive_failures = 0
             except Exception as exc:  # noqa: BLE001
                 job.mark_failed(index, str(exc))
+                self._job_store.save(job)
                 consecutive_failures += 1
                 if consecutive_failures >= self._max_consecutive_failures:
                     break

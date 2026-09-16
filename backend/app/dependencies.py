@@ -8,6 +8,7 @@ from app.repositories.ai.factory import (
     MissingApiKeyError,
     UnsupportedProviderError,
 )
+from app.repositories.jobs.generation_job_repository import GenerationJobRepository
 from app.repositories.jobs.job_store import JobStore
 from app.repositories.pdf.pdf_store import PdfStore
 from app.repositories.settings.root_path_history_repository import (
@@ -22,7 +23,7 @@ from app.repositories.settings.settings_repository import (
 # restart, which is an accepted trade-off for a single-user, Docker
 # Compose-only deployment (see JobStore/PdfStore docstrings).
 pdf_store = PdfStore()
-job_store = JobStore()
+job_store = JobStore(GenerationJobRepository())
 
 
 def get_pdf_store() -> PdfStore:

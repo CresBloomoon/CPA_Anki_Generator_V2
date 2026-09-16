@@ -1,7 +1,10 @@
+from pathlib import Path
+
 import pytest
 
 from app.domain.generation_job import GenerationJob, SectionJob
 from app.domain.section import DeckPath, PageRange, Section
+from app.repositories.jobs.generation_job_repository import GenerationJobRepository
 from app.repositories.jobs.job_store import JobNotFoundError, JobStore
 
 
@@ -87,3 +90,40 @@ class TestJobStore:
 
         assert job.is_complete()
         assert store.find_by_idempotency_key("abc123") is job
+
+
+class TestPersistence:
+    def test_save_without_a_repository_does_not_touch_disk(
+        self, tmp_path: Path
+    ) -> None:
+        # No GenerationJobRepository given -- must behave exactly as before
+        # (in-memory only), and must not create any files.
+        store = JobStore()
+
+        store.save(_make_job("job-1"))
+
+        assert list(tmp_path.iterdir()) == []
+
+    def test_save_with_a_repository_writes_through_to_disk(
+        self, tmp_path: Path
+    ) -> None:
+        repository = GenerationJobRepository(jobs_dir=tmp_path)
+        store = JobStore(repository)
+        job = _make_job("job-1")
+
+        store.save(job)
+
+        assert repository.get("job-1") == job
+
+    def test_get_still_reads_from_the_in_memory_dict_not_the_repository(
+        self, tmp_path: Path
+    ) -> None:
+        # get() must stay purely in-memory (it's on the request-handling
+        # thread's hot path -- see the class docstring) even when a
+        # repository is configured; re-reading from disk isn't its job.
+        repository = GenerationJobRepository(jobs_dir=tmp_path)
+        store = JobStore(repository)
+        job = _make_job("job-1")
+        store.save(job)
+
+        assert store.get("job-1") is job
