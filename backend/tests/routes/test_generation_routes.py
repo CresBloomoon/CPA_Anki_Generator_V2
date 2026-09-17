@@ -1,5 +1,6 @@
 import threading
 import time
+from pathlib import Path
 from urllib.parse import quote
 
 import fitz
@@ -15,6 +16,7 @@ from app.domain.card import CardContent, CardContentItem
 from app.main import app
 from app.repositories.ai.base import AiCardGeneratorRepository
 from app.repositories.ai.dto import PromptContext
+from app.repositories.jobs.generation_job_repository import GenerationJobRepository
 from app.repositories.jobs.job_store import JobStore
 from app.repositories.pdf.pdf_store import PdfStore
 from app.routes.generation_routes import _build_apkg_response
@@ -364,6 +366,54 @@ class TestDownloadGenerationJobSectionPackage:
         finally:
             release_event.set()
             _wait_until_complete(client, job_id)
+
+
+class TestPersistenceAcrossRestart:
+    def test_status_and_download_work_after_the_job_store_is_replaced(
+        self, tmp_path: Path
+    ) -> None:
+        # Simulates a backend restart: a brand-new JobStore (empty
+        # in-memory dict) that only shares the on-disk
+        # GenerationJobRepository with the one used before "restart" is
+        # swapped in mid-test, mirroring how a real restart replaces the
+        # process-wide job_store singleton while backend/data/
+        # generation_jobs/ survives on disk (see Phase7-2-3's dev-log).
+        # Named JobStore instances (not a lambda constructing a fresh one
+        # per call) so requests before "restart" genuinely share one
+        # in-memory store, the same as the real single process-wide
+        # singleton does.
+        test_pdf_store = PdfStore()
+        repository = GenerationJobRepository(jobs_dir=tmp_path)
+        first_job_store = JobStore(repository)
+        app.dependency_overrides[get_pdf_store] = lambda: test_pdf_store
+        app.dependency_overrides[get_job_store] = lambda: first_job_store
+        app.dependency_overrides[get_ai_card_generator_repository] = (
+            lambda: _FakeAiRepository()
+        )
+
+        try:
+            with TestClient(app) as client:
+                _upload_fixture_pdf(client)
+                start_response = _start_generation_job(client)
+                job_id = start_response.json()["job_id"]
+                _wait_until_complete(client, job_id)
+
+                second_job_store = JobStore(repository)
+                app.dependency_overrides[get_job_store] = lambda: second_job_store
+
+                status_response = client.get(f"/generation-jobs/{job_id}")
+                assert status_response.status_code == 200
+                assert status_response.json()["is_complete"] is True
+
+                download_response = client.get(f"/generation-jobs/{job_id}/download")
+                assert download_response.status_code == 200
+
+                section_response = client.get(
+                    f"/generation-jobs/{job_id}/sections/0/download"
+                )
+                assert section_response.status_code == 200
+        finally:
+            app.dependency_overrides.clear()
 
 
 class TestBuildApkgResponse:

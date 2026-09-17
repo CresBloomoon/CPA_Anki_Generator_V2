@@ -11,14 +11,19 @@ class JobNotFoundError(Exception):
 
 
 class JobStore:
-    """In-memory storage for GenerationJob instances, keyed by job_id.
+    """Keyed GenerationJob storage: memory-first, with a disk fallback.
 
-    The in-memory dict is authoritative while the backend process is
-    running (status polling and download routes read from it directly).
-    When a GenerationJobRepository is supplied, save() also writes through
-    to disk so the job survives a backend restart -- see Phase7-2's
-    dev-log. Defaults to None (no persistence) so existing in-memory-only
-    call sites and tests are unaffected.
+    The in-memory dict is checked first and satisfies most reads (status
+    polling and download routes call get() every couple of seconds while a
+    job is active). When a GenerationJobRepository is supplied, save()
+    writes through to disk (see Phase7-2-1's dev-log) and get() falls back
+    to reading from it on a miss -- e.g. after a backend restart wiped the
+    in-memory dict but the job's JSON file survived (see Phase7-2-3's
+    dev-log). A job found this way is cached back into the in-memory dict
+    (without writing back to the repository -- it just came from there) so
+    later get() calls for the same job_id don't re-read from disk. Defaults
+    to no repository (a miss just raises JobNotFoundError), so existing
+    in-memory-only call sites and tests are unaffected.
 
     Uses threading.Lock (not asyncio.Lock) because job execution runs on a
     background thread (see StartGenerationJobUsecase) while status polling
@@ -41,10 +46,17 @@ class JobStore:
 
     def get(self, job_id: str) -> GenerationJob:
         with self._lock:
-            try:
-                return self._jobs[job_id]
-            except KeyError:
-                raise JobNotFoundError(f"no job stored for job_id {job_id!r}") from None
+            job = self._jobs.get(job_id)
+            if job is not None:
+                return job
+
+            if self._generation_job_repository is not None:
+                job = self._generation_job_repository.get(job_id)
+                if job is not None:
+                    self._jobs[job_id] = job
+                    return job
+
+            raise JobNotFoundError(f"no job stored for job_id {job_id!r}")
 
     def find_by_idempotency_key(self, key: str) -> GenerationJob | None:
         # Plain lookup only -- no notion of "does this still count as a
