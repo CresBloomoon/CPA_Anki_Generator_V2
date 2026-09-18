@@ -35,5 +35,18 @@ class GenerationJobRepository:
             return None
         return job_from_dict(json.loads(path.read_text(encoding="utf-8")))
 
+    def list_all(self) -> list[GenerationJob]:
+        if not self._jobs_dir.exists():
+            return []
+        # Order is whatever the filesystem returns -- not meaningful.
+        # Deciding how to order the list (e.g. newest-first) is the
+        # caller's job (see Phase7-2-4's dev-log), the same way
+        # find_by_idempotency_key() stays a plain lookup and leaves
+        # "still counts as a duplicate" policy to its caller.
+        return [
+            job_from_dict(json.loads(path.read_text(encoding="utf-8")))
+            for path in self._jobs_dir.glob("*.json")
+        ]
+
     def _job_path(self, job_id: str) -> Path:
         return self._jobs_dir / f"{job_id}.json"

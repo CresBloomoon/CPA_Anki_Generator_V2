@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import threading
 import uuid
+from datetime import datetime, timezone
 
 from app.domain.card import Card
 from app.domain.generation_job import GenerationJob, SectionJob
@@ -66,6 +67,7 @@ class StartGenerationJobUsecase:
             additional_prompt=additional_prompt,
             idempotency_key=idempotency_key,
             root_path=root_path,
+            created_at=datetime.now(timezone.utc),
         )
         self._job_store.save(job)
 

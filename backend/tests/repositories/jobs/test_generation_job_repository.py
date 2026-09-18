@@ -79,6 +79,7 @@ class TestGenerationJobRepository:
             additional_prompt="具体例を厚めに",
             idempotency_key="abc123",
             root_path="公認会計士試験::監査論",
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
         )
 
         repository.save(job)
@@ -110,3 +111,31 @@ class TestGenerationJobRepository:
         )
 
         assert nested_dir.exists()
+
+
+class TestListAll:
+    def test_returns_an_empty_list_when_the_directory_does_not_exist(
+        self, tmp_path: Path
+    ) -> None:
+        repository = GenerationJobRepository(jobs_dir=tmp_path / "generation_jobs")
+
+        assert repository.list_all() == []
+
+    def test_returns_an_empty_list_when_the_directory_is_empty(
+        self, tmp_path: Path
+    ) -> None:
+        repository = GenerationJobRepository(jobs_dir=tmp_path)
+
+        assert repository.list_all() == []
+
+    def test_returns_every_saved_job(self, tmp_path: Path) -> None:
+        repository = GenerationJobRepository(jobs_dir=tmp_path)
+        section = _make_section("01節 A", "Root::A", end_page=5)
+        job1 = GenerationJob(job_id="job-1", section_jobs=[SectionJob(section=section)])
+        job2 = GenerationJob(job_id="job-2", section_jobs=[SectionJob(section=section)])
+
+        repository.save(job1)
+        repository.save(job2)
+
+        loaded = repository.list_all()
+        assert {job.job_id for job in loaded} == {"job-1", "job-2"}

@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -8,7 +9,17 @@ from app.repositories.jobs.generation_job_repository import GenerationJobReposit
 from app.repositories.jobs.job_store import JobNotFoundError, JobStore
 
 
-def _make_job(job_id: str = "job-1", idempotency_key: str = "") -> GenerationJob:
+def _make_job(
+    job_id: str = "job-1",
+    idempotency_key: str = "",
+    created_at: datetime = datetime(2026, 1, 1, tzinfo=timezone.utc),
+) -> GenerationJob:
+    # A fixed default (rather than leaving created_at to GenerationJob's
+    # own default_factory=lambda: datetime.now(timezone.utc)) so that two
+    # independent _make_job() calls for the same job_id compare equal --
+    # see test_get_falls_back_to_the_repository_when_missing_from_memory
+    # below, and Phase7-2-4's dev-log for the flaky-equality failure this
+    # fixes.
     section = Section(
         title="01節 X",
         page_range=PageRange(start_page=1, end_page=5),
@@ -19,6 +30,7 @@ def _make_job(job_id: str = "job-1", idempotency_key: str = "") -> GenerationJob
         job_id=job_id,
         section_jobs=[SectionJob(section=section)],
         idempotency_key=idempotency_key,
+        created_at=created_at,
     )
 
 
@@ -184,3 +196,38 @@ class TestFallbackToRepository:
 
         with pytest.raises(JobNotFoundError):
             store.get("missing-job")
+
+
+class TestListAll:
+    def test_without_a_repository_returns_only_in_memory_jobs(self) -> None:
+        store = JobStore()
+        job1 = _make_job("job-1")
+        job2 = _make_job("job-2")
+        store.save(job1)
+        store.save(job2)
+
+        assert {job.job_id for job in store.list_all()} == {"job-1", "job-2"}
+
+    def test_without_a_repository_returns_an_empty_list_when_no_jobs_exist(
+        self,
+    ) -> None:
+        store = JobStore()
+
+        assert store.list_all() == []
+
+    def test_with_a_repository_includes_jobs_never_touched_by_this_store(
+        self, tmp_path: Path
+    ) -> None:
+        # Proves the repository -- not the in-memory dict -- is the actual
+        # source of truth when one is configured: job-2 is written
+        # straight to the repository, bypassing job_store entirely (as if
+        # a previous process had saved it and this JobStore never
+        # individually get()'d it since starting up). See Phase7-2-4's
+        # dev-log for why relying on the in-memory dict alone would miss
+        # this job.
+        repository = GenerationJobRepository(jobs_dir=tmp_path)
+        store = JobStore(repository)
+        store.save(_make_job("job-1"))
+        repository.save(_make_job("job-2"))
+
+        assert {job.job_id for job in store.list_all()} == {"job-1", "job-2"}

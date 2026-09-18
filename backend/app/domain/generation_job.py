@@ -59,6 +59,12 @@ class GenerationJob:
     # show a job-level heading without guessing it back out of individual
     # sections' deck_paths.
     root_path: str = ""
+    # Set once at job creation (see StartGenerationJobUsecase.execute()),
+    # used to sort the history list newest-first (see Phase7-2-4's
+    # dev-log). Distinct from SectionJob.started_at/finished_at, which are
+    # per-section. Defaults to "now" so tests that construct GenerationJob
+    # directly are unaffected.
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __post_init__(self) -> None:
         if not self.job_id.strip():

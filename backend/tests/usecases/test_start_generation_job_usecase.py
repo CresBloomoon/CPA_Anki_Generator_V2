@@ -1,5 +1,6 @@
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -580,6 +581,23 @@ class TestExecute:
         job_id = usecase.execute([section], root_path="公認会計士試験::監査論")
 
         assert job_store.get(job_id).root_path == "公認会計士試験::監査論"
+
+    def test_created_at_is_set_to_roughly_now(self) -> None:
+        section = _make_section("01節 A")
+        job_store = JobStore()
+        pdf_store = PdfStore()
+        pdf_store.save("book.pdf", b"pdf-bytes")
+        fake_generate = _FakeGenerateCardsForSectionUsecase(
+            lambda section, on_block_generated: [_make_card("card-1", section)]
+        )
+        usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
+
+        before = datetime.now(timezone.utc)
+        job_id = usecase.execute([section])
+        after = datetime.now(timezone.utc)
+
+        created_at = job_store.get(job_id).created_at
+        assert before <= created_at <= after
 
 
 class TestDuplicateDetection:

@@ -26,6 +26,7 @@ def job_to_dict(job: GenerationJob) -> dict[str, Any]:
         "additional_prompt": job.additional_prompt,
         "idempotency_key": job.idempotency_key,
         "root_path": job.root_path,
+        "created_at": job.created_at.isoformat(),
         "section_jobs": [_section_job_to_dict(sj) for sj in job.section_jobs],
     }
 
@@ -37,6 +38,7 @@ def job_from_dict(data: dict[str, Any]) -> GenerationJob:
         additional_prompt=data["additional_prompt"],
         idempotency_key=data["idempotency_key"],
         root_path=data["root_path"],
+        created_at=datetime.fromisoformat(data["created_at"]),
     )
 
 

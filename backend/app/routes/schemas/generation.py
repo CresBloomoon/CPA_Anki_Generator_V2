@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -39,3 +41,23 @@ class GenerationJobStatusResponse(BaseModel):
     job_id: str
     is_complete: bool
     section_jobs: list[SectionJobStatusResponse]
+
+
+# 履歴一覧（GET /generation-jobs）専用の軽量スキーマ。GenerationJobStatus
+# Responseとは異なり、セクションごとの詳細（status/card_count/error_message
+# 等）は持たない -- 一覧表示に必要な最小限の情報のみ（Phase7-2-4の
+# dev-log参照）。
+class GenerationJobSummaryResponse(BaseModel):
+    job_id: str
+    root_path: str
+    created_at: datetime
+    is_complete: bool
+    section_count: int
+    # DONE + PARTIALLY_DONE の合計（フロントの既存doneCountと同じ、
+    # 「今ダウンロードできる節がいくつあるか」という観点の集計。is_complete
+    # がDONEのみを完了とみなすのとは異なる集計軸）。
+    done_section_count: int
+
+
+class GenerationJobListResponse(BaseModel):
+    jobs: list[GenerationJobSummaryResponse]

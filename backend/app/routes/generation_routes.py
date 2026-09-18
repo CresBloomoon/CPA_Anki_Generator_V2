@@ -6,6 +6,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, Response
 
 from app.dependencies import get_ai_card_generator_repository, get_job_store, get_pdf_store
+from app.domain.generation_job import SectionJobStatus
 from app.domain.section import DeckPath, PageRange, Section
 from app.repositories.ai.base import AiCardGeneratorRepository
 from app.repositories.anki.anki_package_repository import AnkiPackageRepository
@@ -14,7 +15,9 @@ from app.repositories.pdf.pdf_store import PdfNotFoundError, PdfStore
 from app.repositories.pdf.pdf_structure_repository import PdfStructureRepository
 from app.routes.page_range_display import to_internal_end_page
 from app.routes.schemas.generation import (
+    GenerationJobListResponse,
     GenerationJobStatusResponse,
+    GenerationJobSummaryResponse,
     SectionJobStatusResponse,
     StartGenerationJobResponse,
     StartGenerationRequest,
@@ -31,6 +34,7 @@ from app.usecases.generate_cards_for_section_usecase import (
 from app.usecases.get_generation_job_status_usecase import (
     GetGenerationJobStatusUsecase,
 )
+from app.usecases.list_generation_jobs_usecase import ListGenerationJobsUsecase
 from app.usecases.start_generation_job_usecase import (
     DuplicateGenerationJobError,
     StartGenerationJobUsecase,
@@ -76,6 +80,33 @@ def start_generation_job(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     return StartGenerationJobResponse(job_id=job_id)
+
+
+@router.get("/generation-jobs", response_model=GenerationJobListResponse)
+def list_generation_jobs(
+    job_store: JobStore = Depends(get_job_store),
+) -> GenerationJobListResponse:
+    usecase = ListGenerationJobsUsecase(job_store)
+    jobs = usecase.execute()
+
+    return GenerationJobListResponse(
+        jobs=[
+            GenerationJobSummaryResponse(
+                job_id=job.job_id,
+                root_path=job.root_path,
+                created_at=job.created_at,
+                is_complete=job.is_complete(),
+                section_count=len(job.section_jobs),
+                done_section_count=sum(
+                    1
+                    for section_job in job.section_jobs
+                    if section_job.status
+                    in (SectionJobStatus.DONE, SectionJobStatus.PARTIALLY_DONE)
+                ),
+            )
+            for job in jobs
+        ]
+    )
 
 
 @router.get("/generation-jobs/{job_id}", response_model=GenerationJobStatusResponse)

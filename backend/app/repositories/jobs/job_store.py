@@ -58,6 +58,19 @@ class JobStore:
 
             raise JobNotFoundError(f"no job stored for job_id {job_id!r}")
 
+    def list_all(self) -> list[GenerationJob]:
+        # When a repository is configured, it -- not the in-memory dict --
+        # is the source of truth for "every job that exists": get()'s disk
+        # fallback only lazily loads a job into memory the first time it's
+        # individually requested by job_id, so right after a restart the
+        # in-memory dict is an incomplete subset (see Phase7-2-4's
+        # dev-log). Without a repository, the in-memory dict is all there
+        # is anyway.
+        with self._lock:
+            if self._generation_job_repository is not None:
+                return self._generation_job_repository.list_all()
+            return list(self._jobs.values())
+
     def find_by_idempotency_key(self, key: str) -> GenerationJob | None:
         # Plain lookup only -- no notion of "does this still count as a
         # duplicate" (e.g. whether the match is already complete) lives

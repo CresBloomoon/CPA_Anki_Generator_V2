@@ -85,6 +85,7 @@ def _start_generation_job(
     source_file: str = "book.pdf",
     additional_prompt: str = "",
     title: str = "01節 会計の意義",
+    root_path: str = "",
 ):
     return client.post(
         "/generation-jobs",
@@ -99,6 +100,7 @@ def _start_generation_job(
                 }
             ],
             "additional_prompt": additional_prompt,
+            "root_path": root_path,
         },
     )
 
@@ -245,6 +247,56 @@ class TestStartGenerationJob:
         finally:
             release_event.set()
             _wait_until_complete(client, first_response.json()["job_id"])
+
+
+class TestListGenerationJobs:
+    def test_returns_an_empty_list_when_no_jobs_have_run(
+        self, client: TestClient
+    ) -> None:
+        response = client.get("/generation-jobs")
+
+        assert response.status_code == 200
+        assert response.json() == {"jobs": []}
+
+    def test_returns_summary_fields_for_a_completed_job(
+        self, client: TestClient
+    ) -> None:
+        _upload_fixture_pdf(client)
+        start_response = _start_generation_job(
+            client, root_path="公認会計士試験::監査論"
+        )
+        job_id = start_response.json()["job_id"]
+        _wait_until_complete(client, job_id)
+
+        response = client.get("/generation-jobs")
+
+        assert response.status_code == 200
+        jobs = response.json()["jobs"]
+        assert len(jobs) == 1
+        summary = jobs[0]
+        assert summary["job_id"] == job_id
+        assert summary["root_path"] == "公認会計士試験::監査論"
+        assert summary["is_complete"] is True
+        assert summary["section_count"] == 1
+        assert summary["done_section_count"] == 1
+        assert summary["created_at"]
+
+    def test_returns_multiple_jobs_sorted_newest_first(
+        self, client: TestClient
+    ) -> None:
+        _upload_fixture_pdf(client)
+        first_response = _start_generation_job(client, title="01節 A")
+        first_job_id = first_response.json()["job_id"]
+        _wait_until_complete(client, first_job_id)
+
+        second_response = _start_generation_job(client, title="02節 B")
+        second_job_id = second_response.json()["job_id"]
+        _wait_until_complete(client, second_job_id)
+
+        response = client.get("/generation-jobs")
+
+        job_ids = [job["job_id"] for job in response.json()["jobs"]]
+        assert job_ids == [second_job_id, first_job_id]
 
 
 class TestGetGenerationJobStatus:
