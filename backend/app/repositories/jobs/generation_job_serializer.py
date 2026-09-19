@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from app.domain.card import Card, CardContentItem
@@ -31,6 +31,18 @@ def job_to_dict(job: GenerationJob) -> dict[str, Any]:
     }
 
 
+# Fallback for created_at when reading a file persisted before Phase7-2-4
+# added the field -- lets old files keep loading instead of a KeyError
+# (see Phase7-2-5's dev-log for the incident this fixes). datetime.min so
+# such a job always sorts to the very end of ListGenerationJobsUsecase's
+# newest-first ordering, as if its creation time were simply unknown.
+# NOTE: if this value ever actually reaches the history list UI, the
+# frontend will render it as a literal "0001/1/1 ..." date -- consider
+# mapping it to a "作成日時不明" (unknown) display there if that ever
+# becomes a real, recurring case rather than a one-off legacy file.
+_UNKNOWN_CREATED_AT = datetime.min.replace(tzinfo=timezone.utc)
+
+
 def job_from_dict(data: dict[str, Any]) -> GenerationJob:
     return GenerationJob(
         job_id=data["job_id"],
@@ -38,8 +50,12 @@ def job_from_dict(data: dict[str, Any]) -> GenerationJob:
         additional_prompt=data["additional_prompt"],
         idempotency_key=data["idempotency_key"],
         root_path=data["root_path"],
-        created_at=datetime.fromisoformat(data["created_at"]),
+        created_at=_parse_created_at(data.get("created_at")),
     )
+
+
+def _parse_created_at(value: str | None) -> datetime:
+    return datetime.fromisoformat(value) if value is not None else _UNKNOWN_CREATED_AT
 
 
 def _section_job_to_dict(section_job: SectionJob) -> dict[str, Any]:

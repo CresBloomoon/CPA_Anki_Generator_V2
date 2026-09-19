@@ -11,6 +11,10 @@ import type {
 } from '../api/types'
 import type { SectionRow } from './SectionTable'
 import { primaryButtonClasses, textInputClasses } from '../styles'
+import {
+  SECTION_JOB_STATUS_BADGE_CLASSES,
+  SECTION_JOB_STATUS_LABELS,
+} from '../utils/sectionJobStatus'
 import { DownloadButton } from './DownloadButton'
 import { SectionDownloadButton } from './SectionDownloadButton'
 
@@ -19,22 +23,6 @@ const POLL_INTERVAL_MS = 2000
 // long enough to ride out a brief Tailscale reconnect, short enough to
 // stop polling forever against a backend that's actually down.
 const MAX_CONSECUTIVE_POLL_FAILURES = 10
-
-const STATUS_LABELS: Record<SectionJobStatus, string> = {
-  PENDING: '待機中',
-  RUNNING: '生成中',
-  DONE: '完了',
-  PARTIALLY_DONE: '一部完了',
-  FAILED: '失敗',
-}
-
-const STATUS_BADGE_CLASSES: Record<SectionJobStatus, string> = {
-  PENDING: 'bg-gray-100 text-gray-600',
-  RUNNING: 'bg-blue-100 text-blue-700',
-  DONE: 'bg-green-100 text-green-700',
-  PARTIALLY_DONE: 'bg-amber-100 text-amber-700',
-  FAILED: 'bg-red-100 text-red-700',
-}
 
 function formatElapsedSeconds(seconds: number): string {
   const minutes = Math.floor(seconds / 60)
@@ -235,12 +223,12 @@ export function GenerationProgress({
                 >
                   <td className="py-1.5 pr-2">
                     <span
-                      className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASSES[sectionJob.status]}`}
+                      className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs font-medium ${SECTION_JOB_STATUS_BADGE_CLASSES[sectionJob.status]}`}
                     >
                       {sectionJob.status === 'RUNNING' && (
                         <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
                       )}
-                      {STATUS_LABELS[sectionJob.status]}
+                      {SECTION_JOB_STATUS_LABELS[sectionJob.status]}
                     </span>
                   </td>
                   <td className="py-1.5 pr-2">

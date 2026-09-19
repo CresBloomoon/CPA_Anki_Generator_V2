@@ -1,6 +1,7 @@
 import type {
   AiProviderSettings,
   AvailableModelsResponse,
+  GenerationJobListResponse,
   GenerationJobStatusResponse,
   RootPathHistoryResponse,
   ScanResponse,
@@ -142,6 +143,16 @@ export async function getGenerationJobStatus(
   }
 
   return response.json() as Promise<GenerationJobStatusResponse>
+}
+
+export async function listGenerationJobs(): Promise<GenerationJobListResponse> {
+  const response = await fetch('/generation-jobs')
+
+  if (!response.ok) {
+    throw new Error(await extractErrorMessage(response))
+  }
+
+  return response.json() as Promise<GenerationJobListResponse>
 }
 
 export interface DownloadedFile {

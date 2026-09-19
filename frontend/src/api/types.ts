@@ -82,3 +82,19 @@ export interface GenerationJobStatusResponse {
   is_complete: boolean
   section_jobs: SectionJobStatusResponse[]
 }
+
+// 履歴一覧（GET /generation-jobs）専用の軽量な型。GenerationJobStatus
+// Responseと違い、セクションごとの詳細は持たない（Phase7-2-5の
+// dev-log参照）。
+export interface GenerationJobSummaryResponse {
+  job_id: string
+  root_path: string
+  created_at: string
+  is_complete: boolean
+  section_count: number
+  done_section_count: number
+}
+
+export interface GenerationJobListResponse {
+  jobs: GenerationJobSummaryResponse[]
+}

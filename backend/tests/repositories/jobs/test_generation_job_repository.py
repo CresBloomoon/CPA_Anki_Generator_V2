@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -5,6 +6,7 @@ from app.domain.card import Card, CardContentItem
 from app.domain.generation_job import GenerationJob, SectionJob, SectionJobStatus
 from app.domain.section import DeckPath, PageRange, Section
 from app.repositories.jobs.generation_job_repository import GenerationJobRepository
+from app.repositories.jobs.generation_job_serializer import job_to_dict
 
 
 def _make_section(title: str, deck_path: str, end_page: int | None) -> Section:
@@ -139,3 +141,51 @@ class TestListAll:
 
         loaded = repository.list_all()
         assert {job.job_id for job in loaded} == {"job-1", "job-2"}
+
+
+class TestBackwardCompatibility:
+    # Phase7-2-5's dev-log: a job file persisted before Phase7-2-4 added
+    # created_at has no such key at all -- job_from_dict() must tolerate
+    # that instead of raising KeyError (which used to take down the whole
+    # GET /generation-jobs list with a single old file mixed in).
+    def test_get_loads_a_file_missing_created_at_without_raising(
+        self, tmp_path: Path
+    ) -> None:
+        repository = GenerationJobRepository(jobs_dir=tmp_path)
+        section = _make_section("01節 A", "Root::A", end_page=5)
+        job = GenerationJob(job_id="job-1", section_jobs=[SectionJob(section=section)])
+        data = job_to_dict(job)
+        del data["created_at"]
+        (tmp_path / "job-1.json").write_text(
+            json.dumps(data, ensure_ascii=False), encoding="utf-8"
+        )
+
+        loaded = repository.get("job-1")
+
+        assert loaded is not None
+        assert loaded.job_id == "job-1"
+        # Falls back to the earliest possible timestamp so this job sorts
+        # to the very end of a newest-first list, standing in for "unknown".
+        assert loaded.created_at == datetime.min.replace(tzinfo=timezone.utc)
+
+    def test_list_all_still_returns_other_jobs_when_one_file_is_missing_created_at(
+        self, tmp_path: Path
+    ) -> None:
+        repository = GenerationJobRepository(jobs_dir=tmp_path)
+        section = _make_section("01節 A", "Root::A", end_page=5)
+
+        old_job = GenerationJob(
+            job_id="old-job", section_jobs=[SectionJob(section=section)]
+        )
+        old_data = job_to_dict(old_job)
+        del old_data["created_at"]
+        (tmp_path / "old-job.json").write_text(
+            json.dumps(old_data, ensure_ascii=False), encoding="utf-8"
+        )
+
+        repository.save(
+            GenerationJob(job_id="new-job", section_jobs=[SectionJob(section=section)])
+        )
+
+        loaded = repository.list_all()
+        assert {job.job_id for job in loaded} == {"old-job", "new-job"}

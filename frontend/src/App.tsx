@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { UploadPanel } from './components/UploadPanel'
 import { SectionTable, type SectionRow } from './components/SectionTable'
 import { GenerationProgress } from './components/GenerationProgress'
+import { HistoryPanel } from './components/HistoryPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { Toast } from './components/Toast'
 import type {
@@ -259,9 +260,7 @@ function App() {
         <SettingsPanel onSaved={handleSettingsSaved} />
       )}
 
-      {activeTab === 'history' && (
-        <p className="text-sm text-gray-500">準備中です。</p>
-      )}
+      {activeTab === 'history' && <HistoryPanel />}
     </div>
   )
 }
