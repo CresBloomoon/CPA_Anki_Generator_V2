@@ -43,6 +43,25 @@ export function PlusIcon({ className = 'h-4 w-4' }: IconProps) {
   )
 }
 
+// Points right by default; callers rotate it (e.g. rotate-90) to indicate
+// an expanded/open state -- see HistoryPanel's accordion toggle.
+export function ChevronIcon({ className = 'h-4 w-4' }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  )
+}
+
 export function DownloadIcon({ className = 'h-4 w-4' }: IconProps) {
   return (
     <svg

@@ -8,6 +8,7 @@ import {
   SECTION_JOB_STATUS_BADGE_CLASSES,
   SECTION_JOB_STATUS_LABELS,
 } from '../utils/sectionJobStatus'
+import { ChevronIcon } from './icons'
 import { SectionDownloadButton } from './SectionDownloadButton'
 
 function formatCreatedAt(createdAt: string): string {
@@ -118,9 +119,10 @@ export function HistoryPanel() {
                   {job.is_complete ? '' : '（未完了）'}
                 </span>
               </div>
-              <span className="text-xs text-gray-400">
-                {isExpanded ? '閉じる' : '開く'}
-              </span>
+              <ChevronIcon
+                className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+              />
+              <span className="sr-only">{isExpanded ? '閉じる' : '開く'}</span>
             </button>
 
             {isExpanded && (
