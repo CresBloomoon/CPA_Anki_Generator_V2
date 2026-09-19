@@ -111,6 +111,7 @@ export async function updateSettings(
 export async function startGenerationJob(
   sections: SectionInput[],
   additionalPrompt: string,
+  rootPath: string,
 ): Promise<StartGenerationJobResponse> {
   const response = await fetch('/generation-jobs', {
     method: 'POST',
@@ -118,6 +119,7 @@ export async function startGenerationJob(
     body: JSON.stringify({
       sections,
       additional_prompt: additionalPrompt,
+      root_path: rootPath,
     }),
   })
 

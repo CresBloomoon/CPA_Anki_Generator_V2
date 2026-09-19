@@ -54,6 +54,7 @@ export interface SectionInput {
 export interface StartGenerationRequest {
   sections: SectionInput[]
   additional_prompt: string
+  root_path: string
 }
 
 export interface StartGenerationJobResponse {

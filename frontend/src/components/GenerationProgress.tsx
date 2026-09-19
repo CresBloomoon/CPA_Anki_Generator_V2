@@ -53,6 +53,10 @@ function toSectionInput(row: SectionRow): SectionInput {
 
 interface GenerationProgressProps {
   rows: SectionRow[]
+  // Captured by App.tsx from UploadPanel at scan time (see Phase7-2-6's
+  // dev-log) -- forwarded verbatim to startGenerationJob(), purely for
+  // history-list display.
+  rootPath: string
   // Optional: not wired up by App yet (no consumer exists until Phase5-5's
   // download UI needs job_id/is_complete). Kept as part of the component's
   // API now so that phase can just pass a callback without touching this
@@ -66,6 +70,7 @@ interface GenerationProgressProps {
 
 export function GenerationProgress({
   rows,
+  rootPath,
   onStatusChange,
   onDownloaded,
 }: GenerationProgressProps) {
@@ -93,6 +98,7 @@ export function GenerationProgress({
       const response = await startGenerationJob(
         selectedRows.map(toSectionInput),
         additionalPrompt,
+        rootPath,
       )
       setJobId(response.job_id)
     } catch (err) {

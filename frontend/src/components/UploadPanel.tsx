@@ -10,7 +10,11 @@ const ROOT_PATH_INPUT_ID = 'upload-panel-root-path-input'
 
 interface UploadPanelProps {
   onFilesUploaded: (sourceFiles: string[]) => void
-  onScanComplete: (result: ScanResponse) => void
+  // rootPath is passed alongside the scan result (rather than folded into
+  // ScanResponse itself) because ScanResponse mirrors the backend's /scan
+  // response 1:1 -- see api/types.ts -- and rootPath isn't part of that
+  // response (see Phase7-2-6's dev-log).
+  onScanComplete: (result: ScanResponse, rootPath: string) => void
 }
 
 export function UploadPanel({
@@ -117,7 +121,7 @@ export function UploadPanel({
       // manually-added row afterwards.
       onFilesUploaded(sourceFiles)
       const scanResult = await scanPdfs(sourceFiles, rootPath.trim())
-      onScanComplete(scanResult)
+      onScanComplete(scanResult, rootPath.trim())
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {

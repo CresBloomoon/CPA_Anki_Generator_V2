@@ -68,6 +68,11 @@ function App() {
   // Reset to false on every performReset() -- see C-2's dev-log for why no
   // finer-grained "downloaded vs. newly completed since" tracking is done.
   const [hasDownloaded, setHasDownloaded] = useState(false)
+  // Captured from UploadPanel at scan time (see Phase7-2-6's dev-log) --
+  // display-only (history list heading), not used by generation itself,
+  // so re-scanning with a different root path simply overwrites it, and
+  // editing the input after scanning has no further effect.
+  const [rootPath, setRootPath] = useState('')
 
   // Counts sections whose cards are actually downloadable (DONE or
   // PARTIALLY_DONE -- must match DownloadButton's own doneCount, otherwise
@@ -139,6 +144,7 @@ function App() {
     setHasScanned(false)
     setGenerationStatus(null)
     setHasDownloaded(false)
+    setRootPath('')
     setResetKey((prev) => prev + 1)
   }
 
@@ -157,14 +163,17 @@ function App() {
     performReset()
   }
 
-  function handleScanComplete(result: ScanResponse) {
+  function handleScanComplete(result: ScanResponse, scannedRootPath: string) {
     // 追記方式: 複数回に分けてアップロード・スキャンしても、既に手動編集・
     // 追加した行を消さない(まーくんとの合意事項)。warningsは直近の
     // スキャン結果のみを表示する(過去の警告を蓄積させると、既に対応済みの
-    // 警告がいつまでも残ってしまうため)。
+    // 警告がいつまでも残ってしまうため)。rootPathも同様に直近のスキャン
+    // 時点の値で上書きする(表示専用の値のため、複数回スキャンした場合に
+    // 後勝ちになっても実害はない -- Phase7-2-6の合意事項)。
     setRows((prev) => [...prev, ...result.sections.map(toSectionRow)])
     setWarnings(result.warnings)
     setHasScanned(true)
+    setRootPath(scannedRootPath)
   }
 
   const tabs: { key: typeof activeTab; label: string }[] = [
@@ -250,6 +259,7 @@ function App() {
           <GenerationProgress
             key={`progress-${resetKey}`}
             rows={rows}
+            rootPath={rootPath}
             onStatusChange={setGenerationStatus}
             onDownloaded={() => setHasDownloaded(true)}
           />
