@@ -1,9 +1,4 @@
-import { useEffect, useState } from 'react'
-import {
-  GenerationJobNotFoundError,
-  getGenerationJobStatus,
-  startGenerationJob,
-} from '../api/client'
+import { useState } from 'react'
 import type {
   GenerationJobStatusResponse,
   SectionInput,
@@ -17,12 +12,6 @@ import {
 } from '../utils/sectionJobStatus'
 import { DownloadButton } from './DownloadButton'
 import { SectionDownloadButton } from './SectionDownloadButton'
-
-const POLL_INTERVAL_MS = 2000
-// At the poll interval above, 10 consecutive failures is ~20 seconds --
-// long enough to ride out a brief Tailscale reconnect, short enough to
-// stop polling forever against a backend that's actually down.
-const MAX_CONSECUTIVE_POLL_FAILURES = 10
 
 function formatElapsedSeconds(seconds: number): string {
   const minutes = Math.floor(seconds / 60)
@@ -53,15 +42,16 @@ function toSectionInput(row: SectionRow): SectionInput {
 
 interface GenerationProgressProps {
   rows: SectionRow[]
-  // Captured by App.tsx from UploadPanel at scan time (see Phase7-2-6's
-  // dev-log) -- forwarded verbatim to startGenerationJob(), purely for
-  // history-list display.
-  rootPath: string
-  // Optional: not wired up by App yet (no consumer exists until Phase5-5's
-  // download UI needs job_id/is_complete). Kept as part of the component's
-  // API now so that phase can just pass a callback without touching this
-  // component's internals.
-  onStatusChange?: (status: GenerationJobStatusResponse | null) => void
+  // jobId/status/isStarting/error/pollError all live in App.tsx now (see
+  // the dev-log for the tab-switch bug this fixes) -- GenerationProgress
+  // is purely a display + trigger for them, so it survives being
+  // unmounted (e.g. while another tab is active) without losing progress.
+  jobId: string | null
+  status: GenerationJobStatusResponse | null
+  isStarting: boolean
+  error: string | null
+  pollError: string | null
+  onStart: (sections: SectionInput[], additionalPrompt: string) => void
   // Phase5-26: DownloadButton (whole job) now renders inside this
   // component (above the progress table), so this callback is forwarded
   // from App.tsx down to both it and each row's SectionDownloadButton.
@@ -70,17 +60,14 @@ interface GenerationProgressProps {
 
 export function GenerationProgress({
   rows,
-  rootPath,
-  onStatusChange,
+  jobId,
+  status,
+  isStarting,
+  error,
+  pollError,
+  onStart,
   onDownloaded,
 }: GenerationProgressProps) {
-  const [jobId, setJobId] = useState<string | null>(null)
-  const [status, setStatus] = useState<GenerationJobStatusResponse | null>(
-    null,
-  )
-  const [isStarting, setIsStarting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [pollError, setPollError] = useState<string | null>(null)
   // Phase5-23: a single, job-wide free-text instruction forwarded to the AI
   // prompt for every selected section (see additional-prompt-input-ui.md).
   // No dedicated reset is needed -- App.tsx remounts this whole component
@@ -91,76 +78,9 @@ export function GenerationProgress({
   const selectedRows = rows.filter((row) => row.selected)
   const canStart = selectedRows.length > 0 && !isStarting && jobId === null
 
-  async function handleStart() {
-    setIsStarting(true)
-    setError(null)
-    try {
-      const response = await startGenerationJob(
-        selectedRows.map(toSectionInput),
-        additionalPrompt,
-        rootPath,
-      )
-      setJobId(response.job_id)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setIsStarting(false)
-    }
+  function handleStart() {
+    onStart(selectedRows.map(toSectionInput), additionalPrompt)
   }
-
-  useEffect(() => {
-    if (!jobId) return
-
-    let cancelled = false
-    // Counts only *consecutive* failures (reset to 0 on any success), not
-    // a total failure count -- a brief Tailscale blip shouldn't count
-    // against a job that's otherwise polling fine.
-    let consecutiveFailures = 0
-    const intervalId = setInterval(async () => {
-      try {
-        const result = await getGenerationJobStatus(jobId)
-        if (cancelled) return
-        consecutiveFailures = 0
-        setPollError(null)
-        setStatus(result)
-        onStatusChange?.(result)
-        if (result.is_complete) {
-          clearInterval(intervalId)
-        }
-      } catch (err) {
-        if (cancelled) return
-        if (err instanceof GenerationJobNotFoundError) {
-          // JobStore is in-memory only -- a backend restart mid-generation
-          // loses the job for good, so retrying is pointless.
-          setError(
-            '生成ジョブが見つかりません。バックエンドが再起動された可能性があります。',
-          )
-          clearInterval(intervalId)
-          return
-        }
-        consecutiveFailures += 1
-        if (consecutiveFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
-          // Without this cap, a fully-stopped backend leaves this stuck
-          // showing "接続エラーが発生しました。再試行中..." forever.
-          setError(
-            `接続エラーが${consecutiveFailures}回連続で発生したため、進捗確認を停止しました。ネットワーク接続を確認してください。`,
-          )
-          setPollError(null)
-          clearInterval(intervalId)
-          return
-        }
-        // Likely transient (network blip over Tailscale, etc.) -- keep
-        // polling and keep the last-known status on screen, just surface
-        // that something's currently not working.
-        setPollError(err instanceof Error ? err.message : String(err))
-      }
-    }, POLL_INTERVAL_MS)
-
-    return () => {
-      cancelled = true
-      clearInterval(intervalId)
-    }
-  }, [jobId, onStatusChange])
 
   const doneCount =
     status?.section_jobs.filter((job) => job.status === 'DONE').length ?? 0

@@ -1,4 +1,9 @@
 import { useEffect, useState } from 'react'
+import {
+  GenerationJobNotFoundError,
+  getGenerationJobStatus,
+  startGenerationJob,
+} from './api/client'
 import { UploadPanel } from './components/UploadPanel'
 import { SectionTable, type SectionRow } from './components/SectionTable'
 import { GenerationProgress } from './components/GenerationProgress'
@@ -8,11 +13,18 @@ import { Toast } from './components/Toast'
 import type {
   GenerationJobStatusResponse,
   ScanResponse,
+  SectionInput,
   SectionScanResult,
 } from './api/types'
 import { createId } from './utils/id'
 import { setFaviconIcon } from './utils/favicon'
 import { secondaryButtonClasses } from './styles'
+
+const POLL_INTERVAL_MS = 2000
+// At the poll interval above, 10 consecutive failures is ~20 seconds --
+// long enough to ride out a brief Tailscale reconnect, short enough to
+// stop polling forever against a backend that's actually down.
+const MAX_CONSECUTIVE_POLL_FAILURES = 10
 
 function toSectionRow(section: SectionScanResult): SectionRow {
   return {
@@ -73,6 +85,14 @@ function App() {
   // so re-scanning with a different root path simply overwrites it, and
   // editing the input after scanning has no further effect.
   const [rootPath, setRootPath] = useState('')
+  // Lifted up from GenerationProgress (see the dev-log for the tab-switch
+  // bug this fixes): keeping jobId/polling here means they survive
+  // GenerationProgress being unmounted while the user is on another tab,
+  // instead of resetting to "not started" every time 'main' remounts.
+  const [jobId, setJobId] = useState<string | null>(null)
+  const [isStartingGeneration, setIsStartingGeneration] = useState(false)
+  const [generationError, setGenerationError] = useState<string | null>(null)
+  const [pollError, setPollError] = useState<string | null>(null)
 
   // Counts sections whose cards are actually downloadable (DONE or
   // PARTIALLY_DONE -- must match DownloadButton's own doneCount, otherwise
@@ -104,6 +124,63 @@ function App() {
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [hasUnsavedProgress])
+
+  // Moved here from GenerationProgress (see the dev-log this fixes) so
+  // polling keeps running -- and generationStatus keeps updating -- no
+  // matter which tab is currently active, not just while 'main' happens
+  // to be mounted.
+  useEffect(() => {
+    if (!jobId) return
+
+    let cancelled = false
+    // Counts only *consecutive* failures (reset to 0 on any success), not
+    // a total failure count -- a brief Tailscale blip shouldn't count
+    // against a job that's otherwise polling fine.
+    let consecutiveFailures = 0
+    const intervalId = setInterval(async () => {
+      try {
+        const result = await getGenerationJobStatus(jobId)
+        if (cancelled) return
+        consecutiveFailures = 0
+        setPollError(null)
+        setGenerationStatus(result)
+        if (result.is_complete) {
+          clearInterval(intervalId)
+        }
+      } catch (err) {
+        if (cancelled) return
+        if (err instanceof GenerationJobNotFoundError) {
+          // JobStore is in-memory only -- a backend restart mid-generation
+          // loses the job for good, so retrying is pointless.
+          setGenerationError(
+            '生成ジョブが見つかりません。バックエンドが再起動された可能性があります。',
+          )
+          clearInterval(intervalId)
+          return
+        }
+        consecutiveFailures += 1
+        if (consecutiveFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+          // Without this cap, a fully-stopped backend leaves this stuck
+          // showing "接続エラーが発生しました。再試行中..." forever.
+          setGenerationError(
+            `接続エラーが${consecutiveFailures}回連続で発生したため、進捗確認を停止しました。ネットワーク接続を確認してください。`,
+          )
+          setPollError(null)
+          clearInterval(intervalId)
+          return
+        }
+        // Likely transient (network blip over Tailscale, etc.) -- keep
+        // polling and keep the last-known status on screen, just surface
+        // that something's currently not working.
+        setPollError(err instanceof Error ? err.message : String(err))
+      }
+    }, POLL_INTERVAL_MS)
+
+    return () => {
+      cancelled = true
+      clearInterval(intervalId)
+    }
+  }, [jobId])
 
   const isCurrentlyGenerating = isGenerating(generationStatus)
 
@@ -145,7 +222,32 @@ function App() {
     setGenerationStatus(null)
     setHasDownloaded(false)
     setRootPath('')
+    // jobId etc. no longer live inside GenerationProgress, so remounting
+    // it via resetKey doesn't clear them -- clear explicitly instead.
+    setJobId(null)
+    setGenerationError(null)
+    setPollError(null)
     setResetKey((prev) => prev + 1)
+  }
+
+  async function handleStartGeneration(
+    sections: SectionInput[],
+    additionalPrompt: string,
+  ) {
+    setIsStartingGeneration(true)
+    setGenerationError(null)
+    try {
+      const response = await startGenerationJob(
+        sections,
+        additionalPrompt,
+        rootPath,
+      )
+      setJobId(response.job_id)
+    } catch (err) {
+      setGenerationError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setIsStartingGeneration(false)
+    }
   }
 
   function handleResetClick() {
@@ -259,8 +361,12 @@ function App() {
           <GenerationProgress
             key={`progress-${resetKey}`}
             rows={rows}
-            rootPath={rootPath}
-            onStatusChange={setGenerationStatus}
+            jobId={jobId}
+            status={generationStatus}
+            isStarting={isStartingGeneration}
+            error={generationError}
+            pollError={pollError}
+            onStart={handleStartGeneration}
             onDownloaded={() => setHasDownloaded(true)}
           />
         </>
