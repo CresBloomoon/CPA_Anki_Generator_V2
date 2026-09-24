@@ -7,6 +7,7 @@ from app.repositories.ai.claude_repository import (
     ClaudeGenerationError,
     ClaudeRepository,
 )
+from app.domain.generation_job import TokenUsage
 from app.repositories.ai.dto import PromptContext
 
 _GOOD_CARDS_INPUT = {"cards": [{"TITLE": "A", "PAGE_CODE": "1-1-1"}]}
@@ -74,10 +75,30 @@ class TestGenerateCardsSuccess:
             "本文", PromptContext(section_title="01節")
         )
 
-        assert len(result.items) == 1
-        assert result.items[0].title == "A"
+        assert len(result.card_content.items) == 1
+        assert result.card_content.items[0].title == "A"
         assert client.messages.call_count == 1
         assert _no_real_sleep == []
+
+    def test_token_usage_is_a_zero_stub_pending_real_implementation(
+        self, _no_real_sleep: list[float]
+    ) -> None:
+        # Claude/ChatGPT token tracking is deliberately deferred until
+        # either is actually selected as the active provider (see the
+        # token-usage-display feature's dev-log) -- Gemini is the only
+        # provider with real extraction for now.
+        client = _FakeClient(
+            lambda call_count: _FakeMessage([_FakeToolUseBlock(_GOOD_CARDS_INPUT)])
+        )
+        repository = ClaudeRepository(
+            model_name="claude-opus-5", api_key="fake", client=client
+        )
+
+        result = repository.generate_cards(
+            "本文", PromptContext(section_title="01節")
+        )
+
+        assert result.token_usage == TokenUsage(0, 0)
 
 
 class TestAuthenticationErrors:
@@ -142,7 +163,7 @@ class TestRateLimitRetries:
             "本文", PromptContext(section_title="01節")
         )
 
-        assert result.items[0].title == "A"
+        assert result.card_content.items[0].title == "A"
         assert client.messages.call_count == 3
         assert _no_real_sleep == [10.0 * (2**0) + 5, 10.0 * (2**1) + 5]
 

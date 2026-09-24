@@ -2,6 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.domain.card import CardContent
+from app.domain.generation_job import TokenUsage
+
+
+@dataclass(frozen=True)
+class GenerationResult:
+    card_content: CardContent
+    token_usage: TokenUsage
+
 
 @dataclass(frozen=True)
 class PromptContext:

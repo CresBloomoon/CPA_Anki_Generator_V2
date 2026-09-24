@@ -22,6 +22,22 @@ class SectionJobStatus(Enum):
     FAILED = auto()
 
 
+@dataclass(frozen=True)
+class TokenUsage:
+    input_tokens: int
+    output_tokens: int
+
+    @property
+    def total_tokens(self) -> int:
+        return self.input_tokens + self.output_tokens
+
+    def __add__(self, other: TokenUsage) -> TokenUsage:
+        return TokenUsage(
+            self.input_tokens + other.input_tokens,
+            self.output_tokens + other.output_tokens,
+        )
+
+
 @dataclass
 class SectionJob:
     section: Section
@@ -32,6 +48,11 @@ class SectionJob:
     # dev-log). Both None while PENDING.
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    # Accumulated block-by-block via StartGenerationJobUsecase.run()'s
+    # persist_block callback, the same way `cards` is (see the
+    # token-usage-display feature's dev-log). Defaults to zero so a
+    # still-PENDING section reports no usage.
+    token_usage: TokenUsage = field(default_factory=lambda: TokenUsage(0, 0))
 
     def elapsed_seconds(self) -> int | None:
         if self.started_at is None:
@@ -113,6 +134,16 @@ class GenerationJob:
             ):
                 cards.extend(section_job.cards)
         return cards
+
+    def total_token_usage(self) -> TokenUsage:
+        # Unlike collect_generated_cards(), this does NOT filter by status:
+        # tokens spent on a FAILED section were still actually billed, so
+        # excluding them would understate the job's real cost (see the
+        # token-usage-display feature's dev-log).
+        total = TokenUsage(0, 0)
+        for section_job in self.section_jobs:
+            total = total + section_job.token_usage
+        return total
 
     def _require_status(
         self, index: int, expected: SectionJobStatus, action: str

@@ -4,7 +4,12 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.domain.card import Card, CardContentItem
-from app.domain.generation_job import GenerationJob, SectionJob, SectionJobStatus
+from app.domain.generation_job import (
+    GenerationJob,
+    SectionJob,
+    SectionJobStatus,
+    TokenUsage,
+)
 from app.domain.section import DeckPath, PageRange, Section
 
 # Converts the GenerationJob object graph to/from plain JSON-safe dicts for
@@ -66,6 +71,7 @@ def _section_job_to_dict(section_job: SectionJob) -> dict[str, Any]:
         "error_message": section_job.error_message,
         "started_at": _datetime_to_iso(section_job.started_at),
         "finished_at": _datetime_to_iso(section_job.finished_at),
+        "token_usage": _token_usage_to_dict(section_job.token_usage),
     }
 
 
@@ -77,6 +83,26 @@ def _section_job_from_dict(data: dict[str, Any]) -> SectionJob:
         error_message=data["error_message"],
         started_at=_iso_to_datetime(data["started_at"]),
         finished_at=_iso_to_datetime(data["finished_at"]),
+        # .get() (not data["token_usage"]) so files persisted before this
+        # feature -- which have no such key at all -- still load instead of
+        # raising KeyError (see CLAUDE.md's backward-compat rule, added
+        # after Phase7-2-5's created_at incident).
+        token_usage=_token_usage_from_dict(data.get("token_usage")),
+    )
+
+
+def _token_usage_to_dict(token_usage: TokenUsage) -> dict[str, Any]:
+    return {
+        "input_tokens": token_usage.input_tokens,
+        "output_tokens": token_usage.output_tokens,
+    }
+
+
+def _token_usage_from_dict(data: dict[str, Any] | None) -> TokenUsage:
+    if data is None:
+        return TokenUsage(0, 0)
+    return TokenUsage(
+        input_tokens=data["input_tokens"], output_tokens=data["output_tokens"]
     )
 
 

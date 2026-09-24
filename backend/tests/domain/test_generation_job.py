@@ -3,7 +3,12 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.domain.card import Card, CardContentItem
-from app.domain.generation_job import GenerationJob, SectionJob, SectionJobStatus
+from app.domain.generation_job import (
+    GenerationJob,
+    SectionJob,
+    SectionJobStatus,
+    TokenUsage,
+)
 from app.domain.section import DeckPath, PageRange, Section
 
 
@@ -233,3 +238,43 @@ class TestElapsedSeconds:
             finished_at=finished_at,
         )
         assert section_job.elapsed_seconds() == 10
+
+
+class TestTokenUsage:
+    def test_total_tokens_is_input_plus_output(self) -> None:
+        assert TokenUsage(10, 20).total_tokens == 30
+
+    def test_add_sums_both_fields(self) -> None:
+        assert TokenUsage(10, 20) + TokenUsage(1, 2) == TokenUsage(11, 22)
+
+    def test_section_job_token_usage_defaults_to_zero(self) -> None:
+        section_job = SectionJob(section=_make_section("01節"))
+        assert section_job.token_usage == TokenUsage(0, 0)
+
+
+class TestTotalTokenUsage:
+    def test_zero_when_no_section_has_recorded_usage(self) -> None:
+        job = _make_job(2)
+        assert job.total_token_usage() == TokenUsage(0, 0)
+
+    def test_sums_across_all_sections(self) -> None:
+        job = _make_job(2)
+        job.section_jobs[0].token_usage = TokenUsage(10, 20)
+        job.section_jobs[1].token_usage = TokenUsage(5, 7)
+        assert job.total_token_usage() == TokenUsage(15, 27)
+
+    def test_includes_failed_sections_unlike_collect_generated_cards(self) -> None:
+        # Tokens spent on a FAILED section were still actually billed, so
+        # total_token_usage() must not filter by status the way
+        # collect_generated_cards() does (see the token-usage-display
+        # feature's dev-log).
+        job = _make_job(2)
+        job.mark_running(0)
+        job.section_jobs[0].token_usage = TokenUsage(10, 20)
+        job.mark_failed(0, "エラー")
+        job.mark_running(1)
+        job.mark_done(1, [])
+
+        assert job.section_jobs[0].status == SectionJobStatus.FAILED
+        assert job.collect_generated_cards() == []
+        assert job.total_token_usage() == TokenUsage(10, 20)

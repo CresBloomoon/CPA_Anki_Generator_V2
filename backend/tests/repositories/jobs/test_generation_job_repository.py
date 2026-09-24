@@ -3,7 +3,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from app.domain.card import Card, CardContentItem
-from app.domain.generation_job import GenerationJob, SectionJob, SectionJobStatus
+from app.domain.generation_job import (
+    GenerationJob,
+    SectionJob,
+    SectionJobStatus,
+    TokenUsage,
+)
 from app.domain.section import DeckPath, PageRange, Section
 from app.repositories.jobs.generation_job_repository import GenerationJobRepository
 from app.repositories.jobs.generation_job_serializer import job_to_dict
@@ -60,6 +65,7 @@ class TestGenerationJobRepository:
             cards=[_make_card("card-1", section1)],
             started_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
             finished_at=datetime(2026, 1, 1, 0, 5, tzinfo=timezone.utc),
+            token_usage=TokenUsage(input_tokens=16, output_tokens=103),
         )
         partially_done_section_job = SectionJob(
             section=section2,
@@ -68,6 +74,7 @@ class TestGenerationJobRepository:
             error_message="ブロック2/2でAI呼び出しが失敗しました",
             started_at=datetime(2026, 1, 1, 0, 6, tzinfo=timezone.utc),
             finished_at=datetime(2026, 1, 1, 0, 7, tzinfo=timezone.utc),
+            token_usage=TokenUsage(input_tokens=8, output_tokens=40),
         )
         pending_section_job = SectionJob(section=section3)
 
@@ -189,3 +196,23 @@ class TestBackwardCompatibility:
 
         loaded = repository.list_all()
         assert {job.job_id for job in loaded} == {"old-job", "new-job"}
+
+    def test_get_loads_a_file_missing_token_usage_without_raising(
+        self, tmp_path: Path
+    ) -> None:
+        # A file persisted before the token-usage-display feature added
+        # SectionJob.token_usage has no such key at all -- same shape of
+        # incident as the created_at one above.
+        repository = GenerationJobRepository(jobs_dir=tmp_path)
+        section = _make_section("01節 A", "Root::A", end_page=5)
+        job = GenerationJob(job_id="job-1", section_jobs=[SectionJob(section=section)])
+        data = job_to_dict(job)
+        del data["section_jobs"][0]["token_usage"]
+        (tmp_path / "job-1.json").write_text(
+            json.dumps(data, ensure_ascii=False), encoding="utf-8"
+        )
+
+        loaded = repository.get("job-1")
+
+        assert loaded is not None
+        assert loaded.section_jobs[0].token_usage == TokenUsage(0, 0)

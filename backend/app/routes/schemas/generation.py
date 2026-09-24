@@ -35,6 +35,10 @@ class SectionJobStatusResponse(BaseModel):
     card_count: int
     error_message: str | None
     elapsed_seconds: int | None
+    # Total only (input + output) -- see the token-usage-display feature's
+    # dev-log for why the input/output split stays internal to the domain
+    # (SectionJob.token_usage) rather than being exposed here.
+    token_count: int
 
 
 class GenerationJobStatusResponse(BaseModel):
@@ -57,6 +61,9 @@ class GenerationJobSummaryResponse(BaseModel):
     # 「今ダウンロードできる節がいくつあるか」という観点の集計。is_complete
     # がDONEのみを完了とみなすのとは異なる集計軸）。
     done_section_count: int
+    # 全section_jobsの合計（FAILED分も含む。集計方針の理由はGenerationJob.
+    # total_token_usage()のdocstring/コメント参照）。
+    total_token_count: int
 
 
 class GenerationJobListResponse(BaseModel):

@@ -6,9 +6,10 @@ import time
 import anthropic
 
 from app.domain.card import CardContent
+from app.domain.generation_job import TokenUsage
 from app.repositories.ai.base import AiCardGeneratorRepository
 from app.repositories.ai.card_content_mapper import to_card_content_item
-from app.repositories.ai.dto import PromptContext
+from app.repositories.ai.dto import GenerationResult, PromptContext
 from app.repositories.ai.prompt_builder import PromptBuilder
 
 logger = logging.getLogger(__name__)
@@ -94,7 +95,7 @@ class ClaudeRepository(AiCardGeneratorRepository):
 
     def generate_cards(
         self, section_text: str, prompt_context: PromptContext
-    ) -> CardContent:
+    ) -> GenerationResult:
         prompt = self._prompt_builder.build(section_text, prompt_context)
 
         last_error: Exception | None = None
@@ -121,8 +122,16 @@ class ClaudeRepository(AiCardGeneratorRepository):
                     time.monotonic() - call_started_at,
                 )
                 raw_cards = self._extract_raw_cards(response)
-                return CardContent(
+                card_content = CardContent(
                     items=tuple(to_card_content_item(card) for card in raw_cards)
+                )
+                # Token usage tracking is Gemini-only for now (see the
+                # token-usage-display feature's dev-log). response.usage.
+                # input_tokens/output_tokens are known to exist on Anthropic's
+                # Message response, but wiring them up is deferred until
+                # Claude is actually selected as the active provider.
+                return GenerationResult(
+                    card_content=card_content, token_usage=TokenUsage(0, 0)
                 )
             except (anthropic.AuthenticationError, anthropic.PermissionDeniedError) as exc:
                 raise ClaudeAuthenticationError(

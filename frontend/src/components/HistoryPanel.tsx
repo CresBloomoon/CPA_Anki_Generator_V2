@@ -116,7 +116,8 @@ export function HistoryPanel() {
                 <span className="text-xs text-gray-500">
                   {formatCreatedAt(job.created_at)} ・ 全{job.section_count}
                   節中{job.done_section_count}節完了
-                  {job.is_complete ? '' : '（未完了）'}
+                  {job.is_complete ? '' : '（未完了）'} ・ 合計
+                  {job.total_token_count.toLocaleString()}トークン
                 </span>
               </div>
               <ChevronIcon
@@ -139,6 +140,7 @@ export function HistoryPanel() {
                       <tr className="border-b border-gray-200 text-xs text-gray-500">
                         <th className="py-1 pr-2 font-medium">状態</th>
                         <th className="py-1 pr-2 font-medium">節</th>
+                        <th className="py-1 pr-2 font-medium">トークン数</th>
                         <th className="py-1 font-medium">
                           <span className="sr-only">操作</span>
                         </th>
@@ -158,6 +160,9 @@ export function HistoryPanel() {
                             </span>
                           </td>
                           <td className="py-1.5 pr-2">{sectionJob.title}</td>
+                          <td className="py-1.5 pr-2 text-gray-500">
+                            {sectionJob.token_count.toLocaleString()}
+                          </td>
                           <td className="py-1.5">
                             <SectionDownloadButton
                               jobId={job.job_id}

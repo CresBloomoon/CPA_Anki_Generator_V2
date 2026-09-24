@@ -13,14 +13,18 @@ from app.dependencies import (
     get_pdf_store,
 )
 from app.domain.card import CardContent, CardContentItem
+from app.domain.generation_job import TokenUsage
 from app.main import app
 from app.repositories.ai.base import AiCardGeneratorRepository
-from app.repositories.ai.dto import PromptContext
+from app.repositories.ai.dto import GenerationResult, PromptContext
 from app.repositories.jobs.generation_job_repository import GenerationJobRepository
 from app.repositories.jobs.job_store import JobStore
 from app.repositories.pdf.pdf_store import PdfStore
 from app.routes.generation_routes import _build_apkg_response
 from app.usecases.build_anki_package_usecase import AnkiPackageResult
+
+
+_FAKE_TOKEN_USAGE = TokenUsage(input_tokens=10, output_tokens=20)
 
 
 class _FakeAiRepository(AiCardGeneratorRepository):
@@ -34,7 +38,7 @@ class _FakeAiRepository(AiCardGeneratorRepository):
 
     def generate_cards(
         self, section_text: str, prompt_context: PromptContext
-    ) -> CardContent:
+    ) -> GenerationResult:
         self.calls.append((section_text, prompt_context))
         if self._release_event is not None:
             self._release_event.wait(timeout=2.0)
@@ -49,7 +53,9 @@ class _FakeAiRepository(AiCardGeneratorRepository):
             rank_ronbun="B",
             page_code="1-1-1",
         )
-        return CardContent(items=(item,))
+        return GenerationResult(
+            card_content=CardContent(items=(item,)), token_usage=_FAKE_TOKEN_USAGE
+        )
 
 
 @pytest.fixture()
@@ -280,6 +286,7 @@ class TestListGenerationJobs:
         assert summary["section_count"] == 1
         assert summary["done_section_count"] == 1
         assert summary["created_at"]
+        assert summary["total_token_count"] == _FAKE_TOKEN_USAGE.total_tokens
 
     def test_returns_multiple_jobs_sorted_newest_first(
         self, client: TestClient
@@ -317,6 +324,7 @@ class TestGetGenerationJobStatus:
         assert body["section_jobs"][0]["error_message"] is None
         assert body["section_jobs"][0]["elapsed_seconds"] is not None
         assert body["section_jobs"][0]["elapsed_seconds"] >= 0
+        assert body["section_jobs"][0]["token_count"] == _FAKE_TOKEN_USAGE.total_tokens
 
     def test_unknown_job_id_returns_404(self, client: TestClient) -> None:
         response = client.get("/generation-jobs/does-not-exist")

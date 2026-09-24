@@ -6,7 +6,12 @@ from pathlib import Path
 import pytest
 
 from app.domain.card import Card, CardContentItem
-from app.domain.generation_job import GenerationJob, SectionJob, SectionJobStatus
+from app.domain.generation_job import (
+    GenerationJob,
+    SectionJob,
+    SectionJobStatus,
+    TokenUsage,
+)
 from app.domain.section import DeckPath, PageRange, Section
 from app.repositories.jobs.generation_job_repository import GenerationJobRepository
 from app.repositories.jobs.job_store import JobStore
@@ -333,7 +338,7 @@ class TestRun:
         partial_cards = [_make_card("block-1-card", section1)]
 
         def behavior(section: Section, on_block_generated) -> list[Card]:
-            on_block_generated(partial_cards)
+            on_block_generated(partial_cards, TokenUsage(0, 0))
             raise RuntimeError("ブロック2/2でAI呼び出しが失敗しました")
 
         job_store = JobStore()
@@ -408,8 +413,8 @@ class TestRun:
         block2_cards = [_make_card("block-2", section1)]
 
         def behavior(section: Section, on_block_generated) -> list[Card]:
-            on_block_generated(block1_cards)
-            on_block_generated(block2_cards)
+            on_block_generated(block1_cards, TokenUsage(0, 0))
+            on_block_generated(block2_cards, TokenUsage(0, 0))
             return block1_cards + block2_cards
 
         job_store = _SpyJobStore()
@@ -426,12 +431,38 @@ class TestRun:
         assert job_store.save_calls == 4
         assert job.section_jobs[0].cards == block1_cards + block2_cards
 
+    def test_run_accumulates_token_usage_across_blocks(self) -> None:
+        section1 = _make_section("01節 A")
+        block1_cards = [_make_card("block-1", section1)]
+        block2_cards = [_make_card("block-2", section1)]
+        block1_usage = TokenUsage(input_tokens=10, output_tokens=20)
+        block2_usage = TokenUsage(input_tokens=5, output_tokens=7)
+
+        def behavior(section: Section, on_block_generated) -> list[Card]:
+            on_block_generated(block1_cards, block1_usage)
+            on_block_generated(block2_cards, block2_usage)
+            return block1_cards + block2_cards
+
+        job_store = JobStore()
+        pdf_store = PdfStore()
+        pdf_store.save("book.pdf", b"pdf-bytes")
+        fake_generate = _FakeGenerateCardsForSectionUsecase(behavior)
+        usecase = StartGenerationJobUsecase(job_store, pdf_store, fake_generate)
+
+        job = GenerationJob(job_id="job-1", section_jobs=[SectionJob(section=section1)])
+
+        usecase.run(job)
+
+        assert job.section_jobs[0].token_usage == TokenUsage(
+            input_tokens=15, output_tokens=27
+        )
+
     def test_run_persists_state_after_a_partial_block_before_failing(self) -> None:
         section1 = _make_section("01節 A")
         partial_cards = [_make_card("block-1-card", section1)]
 
         def behavior(section: Section, on_block_generated) -> list[Card]:
-            on_block_generated(partial_cards)
+            on_block_generated(partial_cards, TokenUsage(0, 0))
             raise RuntimeError("ブロック2/2でAI呼び出しが失敗しました")
 
         job_store = _SpyJobStore()
@@ -455,8 +486,8 @@ class TestRun:
         block2_cards = [_make_card("block-2", section1)]
 
         def behavior(section: Section, on_block_generated) -> list[Card]:
-            on_block_generated(block1_cards)
-            on_block_generated(block2_cards)
+            on_block_generated(block1_cards, TokenUsage(0, 0))
+            on_block_generated(block2_cards, TokenUsage(0, 0))
             return block1_cards + block2_cards
 
         repository = _RecordingGenerationJobRepository(tmp_path)
@@ -483,7 +514,7 @@ class TestRun:
         block1_cards = [_make_card("block-1", section1)]
 
         def behavior(section: Section, on_block_generated) -> list[Card]:
-            on_block_generated(block1_cards)
+            on_block_generated(block1_cards, TokenUsage(0, 0))
             return block1_cards
 
         job_store = JobStore()  # no GenerationJobRepository wired in

@@ -1,12 +1,15 @@
 import pytest
 
 from app.domain.card import CardContent, CardContentItem
+from app.domain.generation_job import TokenUsage
 from app.domain.section import DeckPath, PageRange, Section
 from app.repositories.ai.base import AiCardGeneratorRepository
-from app.repositories.ai.dto import PromptContext
+from app.repositories.ai.dto import GenerationResult, PromptContext
 from app.usecases.generate_cards_for_section_usecase import (
     GenerateCardsForSectionUsecase,
 )
+
+_ZERO_TOKEN_USAGE = TokenUsage(0, 0)
 
 
 def _build_marked_text(num_pages: int) -> str:
@@ -27,13 +30,18 @@ class _FakePdfStructureRepository:
 
 
 class _FakeAiRepository(AiCardGeneratorRepository):
-    def __init__(self, error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        error: Exception | None = None,
+        token_usage: TokenUsage = _ZERO_TOKEN_USAGE,
+    ) -> None:
         self.calls: list[tuple[str, PromptContext]] = []
         self._error = error
+        self._token_usage = token_usage
 
     def generate_cards(
         self, section_text: str, prompt_context: PromptContext
-    ) -> CardContent:
+    ) -> GenerationResult:
         self.calls.append((section_text, prompt_context))
         if self._error is not None:
             raise self._error
@@ -48,7 +56,9 @@ class _FakeAiRepository(AiCardGeneratorRepository):
             rank_ronbun="B",
             page_code="1-1-1",
         )
-        return CardContent(items=(item,))
+        return GenerationResult(
+            card_content=CardContent(items=(item,)), token_usage=self._token_usage
+        )
 
 
 def _make_section(
@@ -178,7 +188,9 @@ class TestOnBlockGeneratedCallback:
         cards = usecase.execute(
             _make_section(),
             pdf_bytes=b"...",
-            on_block_generated=reported_blocks.append,
+            on_block_generated=lambda block_cards, token_usage: reported_blocks.append(
+                block_cards
+            ),
         )
 
         # 6 pages -> split into 2 blocks (see
@@ -187,6 +199,26 @@ class TestOnBlockGeneratedCallback:
         assert len(reported_blocks[0]) == 1
         assert len(reported_blocks[1]) == 1
         assert reported_blocks[0] + reported_blocks[1] == cards
+
+    def test_called_with_that_blocks_token_usage(self) -> None:
+        pdf_repo = _FakePdfStructureRepository(_build_marked_text(6))
+        block_token_usage = TokenUsage(input_tokens=10, output_tokens=20)
+        ai_repo = _FakeAiRepository(token_usage=block_token_usage)
+        usecase = GenerateCardsForSectionUsecase(pdf_repo, ai_repo)
+        reported_usages: list[TokenUsage] = []
+
+        usecase.execute(
+            _make_section(),
+            pdf_bytes=b"...",
+            on_block_generated=lambda block_cards, token_usage: reported_usages.append(
+                token_usage
+            ),
+        )
+
+        # Each of the 2 blocks reports its own (here, identical) usage --
+        # accumulating them onto the SectionJob is StartGenerationJobUsecase's
+        # job, not this usecase's.
+        assert reported_usages == [block_token_usage, block_token_usage]
 
     def test_earlier_blocks_are_reported_before_a_later_block_fails(self) -> None:
         # Reproduces the incident this callback exists to prevent: block 2
@@ -214,7 +246,9 @@ class TestOnBlockGeneratedCallback:
             usecase.execute(
                 _make_section(),
                 pdf_bytes=b"...",
-                on_block_generated=reported_blocks.append,
+                on_block_generated=lambda block_cards, token_usage: reported_blocks.append(
+                    block_cards
+                ),
             )
 
         assert len(reported_blocks) == 1

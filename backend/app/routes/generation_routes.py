@@ -103,6 +103,7 @@ def list_generation_jobs(
                     if section_job.status
                     in (SectionJobStatus.DONE, SectionJobStatus.PARTIALLY_DONE)
                 ),
+                total_token_count=job.total_token_usage().total_tokens,
             )
             for job in jobs
         ]
@@ -129,6 +130,7 @@ def get_generation_job_status(
                 card_count=len(section_job.cards),
                 error_message=section_job.error_message,
                 elapsed_seconds=section_job.elapsed_seconds(),
+                token_count=section_job.token_usage.total_tokens,
             )
             for section_job in job.section_jobs
         ],

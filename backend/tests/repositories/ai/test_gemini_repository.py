@@ -12,9 +12,24 @@ from app.repositories.ai.gemini_repository import (
 _GOOD_JSON = json.dumps({"cards": [{"TITLE": "A", "PAGE_CODE": "1-1-1"}]})
 
 
+class _FakeUsageMetadata:
+    def __init__(self, prompt_token_count: int, total_token_count: int) -> None:
+        self.prompt_token_count = prompt_token_count
+        self.total_token_count = total_token_count
+
+
 class _FakeResponse:
-    def __init__(self, text: str) -> None:
+    def __init__(
+        self,
+        text: str,
+        prompt_token_count: int = 16,
+        total_token_count: int = 119,
+    ) -> None:
         self.text = text
+        # Defaults mirror an actual verified gemini-2.5-flash call (see the
+        # token-usage-display feature's dev-log): prompt=16,
+        # candidates=11, thoughts=92, total=119.
+        self.usage_metadata = _FakeUsageMetadata(prompt_token_count, total_token_count)
 
 
 class _FakeModels:
@@ -57,10 +72,39 @@ class TestGenerateCardsSuccess:
             "本文", PromptContext(section_title="01節")
         )
 
-        assert len(result.items) == 1
-        assert result.items[0].title == "A"
+        assert len(result.card_content.items) == 1
+        assert result.card_content.items[0].title == "A"
         assert client.models.call_count == 1
         assert _no_real_sleep == []
+
+
+class TestGenerateCardsTokenUsage:
+    def test_output_tokens_is_total_minus_prompt_not_candidates_alone(
+        self, _no_real_sleep: list[float]
+    ) -> None:
+        # Verified against a real gemini-2.5-flash call (see the
+        # token-usage-display feature's dev-log): thinking-capable models
+        # report a thoughts_token_count that dwarfs candidates_token_count
+        # (92 vs 11 tokens in that call) but isn't broken out as its own
+        # field on the response -- only folded into total_token_count.
+        # Reading candidates_token_count alone as "output" would therefore
+        # significantly undercount actual billed usage.
+        client = _FakeClient(
+            lambda call_count: _FakeResponse(
+                _GOOD_JSON, prompt_token_count=16, total_token_count=119
+            )
+        )
+        repository = GeminiRepository(
+            model_name="gemini-2.5-pro", api_key="fake", client=client
+        )
+
+        result = repository.generate_cards(
+            "本文", PromptContext(section_title="01節")
+        )
+
+        assert result.token_usage.input_tokens == 16
+        assert result.token_usage.output_tokens == 103
+        assert result.token_usage.total_tokens == 119
 
 
 class TestAuthenticationErrors:
@@ -103,7 +147,7 @@ class TestRateLimitRetries:
             "本文", PromptContext(section_title="01節")
         )
 
-        assert result.items[0].title == "A"
+        assert result.card_content.items[0].title == "A"
         assert client.models.call_count == 3
         assert _no_real_sleep == [10.0 * (2**0) + 5, 10.0 * (2**1) + 5]
 

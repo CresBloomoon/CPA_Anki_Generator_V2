@@ -7,9 +7,10 @@ from google import genai
 from google.genai import types as genai_types
 
 from app.domain.card import CardContent
+from app.domain.generation_job import TokenUsage
 from app.repositories.ai.base import AiCardGeneratorRepository
 from app.repositories.ai.card_content_mapper import to_card_content_item
-from app.repositories.ai.dto import PromptContext
+from app.repositories.ai.dto import GenerationResult, PromptContext
 from app.repositories.ai.json_repair import extract_cards_from_json
 from app.repositories.ai.prompt_builder import PromptBuilder
 
@@ -68,7 +69,7 @@ class GeminiRepository(AiCardGeneratorRepository):
 
     def generate_cards(
         self, section_text: str, prompt_context: PromptContext
-    ) -> CardContent:
+    ) -> GenerationResult:
         prompt = self._prompt_builder.build(section_text, prompt_context)
 
         last_error: Exception | None = None
@@ -96,8 +97,27 @@ class GeminiRepository(AiCardGeneratorRepository):
                     time.monotonic() - call_started_at,
                 )
                 raw_cards = extract_cards_from_json(response.text)
-                return CardContent(
+                card_content = CardContent(
                     items=tuple(to_card_content_item(card) for card in raw_cards)
+                )
+                # thoughts_token_count (and any other component Gemini bundles
+                # into the total besides prompt_token_count) is folded into
+                # output_tokens via subtraction from the total, rather than
+                # read as candidates_token_count alone -- for a thinking-
+                # capable model like gemini-2.5-flash, thoughts_token_count
+                # can dwarf candidates_token_count (verified: 92 vs 11 tokens
+                # in a real call), so reading only candidates_token_count
+                # would significantly undercount actual billed usage.
+                usage_metadata = response.usage_metadata
+                token_usage = TokenUsage(
+                    input_tokens=usage_metadata.prompt_token_count,
+                    output_tokens=(
+                        usage_metadata.total_token_count
+                        - usage_metadata.prompt_token_count
+                    ),
+                )
+                return GenerationResult(
+                    card_content=card_content, token_usage=token_usage
                 )
             except Exception as exc:  # noqa: BLE001 - classified below
                 call_elapsed = time.monotonic() - call_started_at

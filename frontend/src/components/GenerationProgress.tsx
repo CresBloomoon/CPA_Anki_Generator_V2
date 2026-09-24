@@ -136,6 +136,7 @@ export function GenerationProgress({
                 <th className="py-1 pr-2 font-medium">節</th>
                 <th className="py-1 pr-2 font-medium">経過時間</th>
                 <th className="py-1 pr-2 font-medium">枚数</th>
+                <th className="py-1 pr-2 font-medium">トークン数</th>
                 <th className="py-1 font-medium">
                   <span className="sr-only">操作</span>
                 </th>
@@ -176,6 +177,9 @@ export function GenerationProgress({
                   </td>
                   <td className="py-1.5 pr-2 text-gray-500">
                     {formatCardCount(sectionJob.status, sectionJob.card_count)}
+                  </td>
+                  <td className="py-1.5 pr-2 text-gray-500">
+                    {sectionJob.token_count.toLocaleString()}
                   </td>
                   <td className="py-1.5">
                     <SectionDownloadButton

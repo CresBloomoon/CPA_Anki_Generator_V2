@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 
 from app.domain.card import Card
-from app.domain.generation_job import GenerationJob, SectionJob
+from app.domain.generation_job import GenerationJob, SectionJob, TokenUsage
 from app.domain.section import Section
 from app.repositories.jobs.job_store import JobStore
 from app.repositories.pdf.pdf_store import PdfStore
@@ -120,7 +120,9 @@ class StartGenerationJobUsecase:
             try:
                 pdf_bytes = self._pdf_store.get(section_job.section.source_file)
 
-                def persist_block(block_cards: list[Card]) -> None:
+                def persist_block(
+                    block_cards: list[Card], token_usage: TokenUsage
+                ) -> None:
                     # Extends onto *this* loop iteration's section_job/job
                     # (captured by closure) and re-saves immediately, so a
                     # GenerationJobRepository wired into job_store writes
@@ -131,6 +133,7 @@ class StartGenerationJobUsecase:
                     # it synchronously within the same iteration, before
                     # section_job/job are ever rebound by the next one.
                     section_job.cards.extend(block_cards)
+                    section_job.token_usage = section_job.token_usage + token_usage
                     self._job_store.save(job)
 
                 cards = self._generate_cards_for_section_usecase.execute(

@@ -6,6 +6,7 @@ import time
 from typing import Callable, Protocol
 
 from app.domain.card import Card
+from app.domain.generation_job import TokenUsage
 from app.domain.section import Section
 from app.repositories.ai.base import AiCardGeneratorRepository
 from app.repositories.ai.dto import PromptContext
@@ -48,15 +49,17 @@ class GenerateCardsForSectionUsecase:
         section: Section,
         pdf_bytes: bytes,
         additional_prompt: str = "",
-        on_block_generated: Callable[[list[Card]], None] | None = None,
+        on_block_generated: Callable[[list[Card], TokenUsage], None] | None = None,
     ) -> list[Card]:
         # on_block_generated, if given, is called once per block with just
-        # that block's cards (not the running total) immediately after the
-        # block succeeds. This lets the caller (StartGenerationJobUsecase)
-        # persist progress incrementally onto the SectionJob it owns, so a
-        # later block's failure doesn't discard already-paid-for,
-        # already-generated cards from earlier blocks -- see Phase4-8's
-        # dev-log for the full incident this addresses.
+        # that block's cards (not the running total) and that block's token
+        # usage, immediately after the block succeeds. This lets the caller
+        # (StartGenerationJobUsecase) persist progress incrementally onto the
+        # SectionJob it owns, so a later block's failure doesn't discard
+        # already-paid-for, already-generated cards (or the tokens already
+        # spent) from earlier blocks -- see Phase4-8's dev-log for the cards
+        # side of this, and the token-usage-display feature's dev-log for
+        # why token_usage was added to the same callback.
         full_text = self._pdf_structure_repository.extract_text_from_range(
             pdf_bytes, section.page_range.start_page, section.page_range.end_page
         )
@@ -79,9 +82,10 @@ class GenerateCardsForSectionUsecase:
             # intentionally left to propagate -- deciding whether to abort
             # the rest of the job or keep sections already completed is
             # Phase3-3's job, not this usecase's.
-            card_content = self._ai_repository.generate_cards(
+            result = self._ai_repository.generate_cards(
                 "".join(block_pages), prompt_context
             )
+            card_content = result.card_content
             elapsed_seconds = time.monotonic() - started_at
             logger.info(
                 "[%s] ブロック %d/%d 完了、%d件生成（%.1f秒）",
@@ -101,7 +105,7 @@ class GenerateCardsForSectionUsecase:
             ]
             cards.extend(block_cards)
             if on_block_generated is not None:
-                on_block_generated(block_cards)
+                on_block_generated(block_cards, result.token_usage)
 
         return cards
 

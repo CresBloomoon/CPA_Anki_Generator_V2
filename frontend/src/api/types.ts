@@ -76,6 +76,9 @@ export interface SectionJobStatusResponse {
   // Phase4-6: backend field only for now -- not yet displayed anywhere
   // (see Phase5-26's planned progress table).
   elapsed_seconds: number | null
+  // Total only (input + output combined) -- see the token-usage-display
+  // feature's dev-log for why the split stays backend-internal.
+  token_count: number
 }
 
 export interface GenerationJobStatusResponse {
@@ -94,6 +97,9 @@ export interface GenerationJobSummaryResponse {
   is_complete: boolean
   section_count: number
   done_section_count: number
+  // Sum across all section_jobs, including FAILED ones (see
+  // GenerationJob.total_token_usage()'s docstring on the backend).
+  total_token_count: number
 }
 
 export interface GenerationJobListResponse {
