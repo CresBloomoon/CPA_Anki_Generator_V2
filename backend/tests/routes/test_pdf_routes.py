@@ -109,6 +109,9 @@ class TestScanPdfs:
             == "公認会計士試験::財務会計論::第01章 総論::第01節 会計の意義"
         )
         assert section_titles["第01節 会計の意義"]["source_file"] == "book.pdf"
+        assert section_titles["第01章 総論"]["level"] == 1
+        assert section_titles["第01節 会計の意義"]["level"] == 2
+        assert section_titles["第02節 会計公準"]["level"] == 2
 
     def test_scan_converts_end_page_to_the_inclusive_last_page_for_display(
         self, client: TestClient

@@ -19,6 +19,9 @@ class SectionScanResult(BaseModel):
     end_page: int | None
     deck_path: str
     source_file: str
+    # TOC depth at scan time (see section-table-indent-backend's dev-log).
+    # Purely for frontend display (indentation) -- not used by generation.
+    level: int
 
 
 class ScanResponse(BaseModel):

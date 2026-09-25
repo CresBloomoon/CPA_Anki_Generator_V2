@@ -45,7 +45,7 @@ class TestScanPdfStructureUsecase:
 
         assert len(result.sections) == 1
         assert (
-            result.sections[0].deck_path.joined()
+            result.sections[0].section.deck_path.joined()
             == "公認会計士試験::管理会計論::第01章 総論"
         )
 
@@ -72,7 +72,7 @@ class TestScanPdfStructureUsecase:
         )
 
         assert (
-            result.sections[0].deck_path.joined()
+            result.sections[0].section.deck_path.joined()
             == "公認会計士試験::財務会計論::第01部 コンプリートチェック::第01章 財務会計の基礎概念"
         )
 
@@ -96,7 +96,7 @@ class TestScanPdfStructureUsecase:
             root_path="Root",
         )
 
-        assert result.sections[0].deck_path.joined() == "Root::第01部 A::第01章 B::第01節 詳細"
+        assert result.sections[0].section.deck_path.joined() == "Root::第01部 A::第01章 B::第01節 詳細"
 
     def test_source_file_is_preserved_on_each_section(self) -> None:
         repository = _FakePdfStructureRepository(
@@ -109,7 +109,7 @@ class TestScanPdfStructureUsecase:
             root_path="Root",
         )
 
-        assert result.sections[0].source_file == "book.pdf"
+        assert result.sections[0].section.source_file == "book.pdf"
 
     def test_multiple_pdfs_are_scanned_and_aggregated_into_one_flat_list(self) -> None:
         repository = _FakePdfStructureRepository(
@@ -133,7 +133,10 @@ class TestScanPdfStructureUsecase:
         )
 
         assert len(result.sections) == 2
-        assert {s.source_file for s in result.sections} == {"book1.pdf", "book2.pdf"}
+        assert {s.section.source_file for s in result.sections} == {
+            "book1.pdf",
+            "book2.pdf",
+        }
 
     def test_warnings_from_all_files_are_aggregated(self) -> None:
         repository = _FakePdfStructureRepository(
@@ -173,5 +176,58 @@ class TestScanPdfStructureUsecase:
             root_path="Root",
         )
 
-        assert result.sections[0].page_range.start_page == 5
-        assert result.sections[0].page_range.end_page == 10
+        assert result.sections[0].section.page_range.start_page == 5
+        assert result.sections[0].section.page_range.end_page == 10
+
+
+class TestScannedSectionLevel:
+    def test_flat_hierarchy_all_sections_are_level_one(self) -> None:
+        # 管理会計論-style: no sub-level at all (see ADR 0001).
+        repository = _FakePdfStructureRepository(
+            {
+                "book.pdf": ScanResult(
+                    sections=(
+                        _raw_section("第01章 総論", level=1),
+                        _raw_section("第02章 各論", level=1),
+                    )
+                )
+            }
+        )
+        usecase = ScanPdfStructureUsecase(repository)
+
+        result = usecase.execute(
+            [PdfFileInput(pdf_bytes=b"...", source_file="book.pdf")],
+            root_path="Root",
+        )
+
+        assert [scanned.level for scanned in result.sections] == [1, 1]
+
+    def test_level_is_forwarded_unchanged_for_each_section(self) -> None:
+        # 財務会計論-style 部->章->節: level tracks depth regardless of what
+        # each level happens to be labeled (see section-table-indent-backend's
+        # dev-log -- this must not assume "chapter"/"section" naming).
+        repository = _FakePdfStructureRepository(
+            {
+                "book.pdf": ScanResult(
+                    sections=(
+                        _raw_section("第01部 A", ancestors=(), level=1),
+                        _raw_section(
+                            "第01章 B", ancestors=("第01部 A",), level=2
+                        ),
+                        _raw_section(
+                            "第01節 C",
+                            ancestors=("第01部 A", "第01章 B"),
+                            level=3,
+                        ),
+                    )
+                )
+            }
+        )
+        usecase = ScanPdfStructureUsecase(repository)
+
+        result = usecase.execute(
+            [PdfFileInput(pdf_bytes=b"...", source_file="book.pdf")],
+            root_path="Root",
+        )
+
+        assert [scanned.level for scanned in result.sections] == [1, 2, 3]

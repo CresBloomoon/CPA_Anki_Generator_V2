@@ -25,8 +25,21 @@ class PdfFileInput:
 
 
 @dataclass(frozen=True)
+class ScannedSection:
+    # Pairs a Section with the TOC depth it was found at (see
+    # section-table-indent-backend's dev-log). Kept out of Section itself:
+    # Section is also built from SectionInput at generation-start time,
+    # which has no notion of depth, so putting it there would leak this
+    # scan-only display concern into a shared domain entity. Bundling the
+    # two together (rather than two parallel lists) also rules out the two
+    # ever silently drifting out of sync under future filtering/reordering.
+    section: Section
+    level: int
+
+
+@dataclass(frozen=True)
 class ScanSectionsResult:
-    sections: tuple[Section, ...]
+    sections: tuple[ScannedSection, ...]
     warnings: tuple[str, ...]
 
 
@@ -39,7 +52,7 @@ class ScanPdfStructureUsecase:
     ) -> ScanSectionsResult:
         root = DeckPath.from_string(root_path)
 
-        sections: list[Section] = []
+        sections: list[ScannedSection] = []
         warnings: list[str] = []
 
         for pdf_file in pdf_files:
@@ -49,11 +62,14 @@ class ScanPdfStructureUsecase:
             warnings.extend(scan_result.warnings)
             for raw_section in scan_result.sections:
                 sections.append(
-                    Section(
-                        title=raw_section.title,
-                        page_range=raw_section.page_range,
-                        deck_path=self._build_deck_path(root, raw_section),
-                        source_file=raw_section.source_file,
+                    ScannedSection(
+                        section=Section(
+                            title=raw_section.title,
+                            page_range=raw_section.page_range,
+                            deck_path=self._build_deck_path(root, raw_section),
+                            source_file=raw_section.source_file,
+                        ),
+                        level=raw_section.level,
                     )
                 )
 

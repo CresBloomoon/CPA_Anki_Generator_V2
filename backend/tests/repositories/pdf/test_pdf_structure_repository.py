@@ -91,6 +91,7 @@ class TestBuildSectionsFromToc:
         # Same title, different part -> disambiguated by ancestors.
         assert sections[5].ancestors == ("第02部 スマートコアチェックplus",)
         assert sections[2].ancestors != sections[5].ancestors
+        assert [s.level for s in sections] == [1, 1, 2, 2, 1, 2]
 
     def test_flat_single_level_hierarchy_has_no_ancestors(self) -> None:
         # Mirrors 管理会計論: no sub-level exists at all.

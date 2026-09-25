@@ -83,13 +83,14 @@ def scan_pdfs(
     return ScanResponse(
         sections=[
             SectionScanResult(
-                title=section.title,
-                start_page=section.page_range.start_page,
-                end_page=to_display_end_page(section.page_range.end_page),
-                deck_path=section.deck_path.joined(),
-                source_file=section.source_file,
+                title=scanned.section.title,
+                start_page=scanned.section.page_range.start_page,
+                end_page=to_display_end_page(scanned.section.page_range.end_page),
+                deck_path=scanned.section.deck_path.joined(),
+                source_file=scanned.section.source_file,
+                level=scanned.level,
             )
-            for section in result.sections
+            for scanned in result.sections
         ],
         warnings=list(result.warnings),
     )
